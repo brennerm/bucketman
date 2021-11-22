@@ -10,6 +10,9 @@ import rich.table
 import inspect
 
 class Prompt(Widget):
+    selected_style = "bold black on #FF9900"
+    unselected_style = "#FF9900 on black"
+
     def __init__(self, text: str, name: str = None) -> None:
         self.text = text
         self.__callback = None
@@ -17,8 +20,8 @@ class Prompt(Widget):
         self.__callback_kwargs = None
         super().__init__(name=name)
 
-    yes = Button('Yes', style="dark_blue on white")
-    no = Button('No', style="white on dark_blue")
+    yes = Button('Yes', style=selected_style)
+    no = Button('No', style=unselected_style)
     result = textual.reactive.Reactive(True)
 
     async def on_key(self, event: textual.events.Key) -> None:
@@ -46,11 +49,11 @@ class Prompt(Widget):
 
     async def watch_result(self, result):
         if result:
-            self.yes.button_style = "dark_blue on white"
-            self.no.button_style = "white on dark_blue"
+            self.yes.button_style = self.selected_style
+            self.no.button_style = self.unselected_style
         else:
-            self.no.button_style = "dark_blue on white"
-            self.yes.button_style = "white on dark_blue"
+            self.no.button_style = self.selected_style
+            self.yes.button_style = self.unselected_style
 
     def render(self) -> RenderableType:
         table = rich.table.Table.grid(padding=(0, 1), expand=True)

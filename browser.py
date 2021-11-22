@@ -1,11 +1,11 @@
 import os
-from re import S
+import shutil
 import warnings
+
 import boto3
 import botocore.exceptions
 
 import textual.app
-from textual.messages import Layout
 import textual.widgets
 import textual.views
 import textual.reactive
@@ -15,30 +15,6 @@ from s3browser.widgets.prompt import Prompt
 from s3browser.widgets.s3tree import S3Tree
 from s3browser.widgets.statuslog import StatusLog
 from s3browser.events import MakeCopy, StatusUpdate
-
-#class S3Browser(textual.views.GridView):
-#    def on_mount(self) -> None:
-        #self.grid.add_column("left", max_size=120)
-        #self.grid.add_column("right", max_size=120)
-        #self.grid.add_row("pane", fraction=21)
-        #self.grid.add_row("status", fraction=3)
-        #self.grid.add_row("keys", fraction=1)
-        #self.grid.add_row("footer", fraction=1)
-        #self.grid.add_areas(
-        #    left="left,pane",
-        #    right="right,pane",
-        #    status="left-start|right-end,status",
-        #    keys="left-start|right-end,keys",
-        #    footer="left-start|right-end,footer",
-        #)
-
-        #self.grid.place(left=textual.widgets.ScrollView(textual.widgets.DirectoryTree(os.getcwd(), "local")))
-        #self.grid.place(right=textual.widgets.Placeholder(name="right"))
-        #self.grid.place(status=textual.widgets.ScrollView())
-        #self.grid.place(keys=textual.widgets.Placeholder(name="keys"))
-        #self.grid.place(footer=textual.widgets.Footer())
-
-
 
 class BucketManApp(textual.app.App):
     def __init__(self, *args, **kwargs):
@@ -53,7 +29,7 @@ class BucketManApp(textual.app.App):
     show_dialog = textual.reactive.Reactive(False)
 
     async def on_load(self) -> None:
-        await self.bind("q", "quit", "Quit")
+        await self.bind("escape", "quit", "Quit")
         await self.bind("ctrl+i", "cycle", "Cycle", key_display='TAB')
         await self.bind("o", "open", "Open")
         await self.bind("c", "copy", "Copy")
@@ -66,11 +42,14 @@ class BucketManApp(textual.app.App):
         elif self.right_pane.window.widget.has_focus:
             await self.left_pane.window.widget.focus()
 
-
     async def action_delete(self) -> None:
-
         if self.left_pane.window.widget.has_focus:
-            pass
+            path = [node.data.path for node_id, node in self.directory.nodes.items() if node_id == self.directory.cursor][0]
+            await self.dialog.do_prompt(
+                f"Do you want to delete the path {path}?",
+                self.do_local_delete,
+                path=path
+            )
         else:
             await self.dialog.do_prompt(
                 f"Do you want to delete the object {self.s3tree.selected_object.key}?",
@@ -78,6 +57,18 @@ class BucketManApp(textual.app.App):
                 bucket=self.s3tree.bucket_name,
                 key=self.s3tree.selected_object.key
             )
+
+    async def do_local_delete(self, path) -> None:
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+            else:
+                shutil.rmtree(path)
+        except OSError as e:
+            await self.handle_status_update(StatusUpdate(self, message=f'Failed to delete path "{path}": {e.strerror}'))
+        else:
+            await self.handle_status_update(StatusUpdate(self, message=f'Successfully deleted path "{path}"'))
+            await self.reload_left_tree()
 
     async def do_s3_delete(self, bucket, key) -> None:
         client = boto3.client('s3')
