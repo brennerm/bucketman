@@ -20,9 +20,9 @@ class Prompt(Widget):
         self.__callback_kwargs = None
         super().__init__(name=name)
 
-    yes = Button('Yes', style=selected_style)
-    no = Button('No', style=unselected_style)
-    result = textual.reactive.Reactive(True)
+    yes = Button('Yes', style=unselected_style)
+    no = Button('No', style=selected_style)
+    result = textual.reactive.Reactive(False)
 
     async def on_key(self, event: textual.events.Key) -> None:
         await self.dispatch_key(event)
@@ -45,6 +45,7 @@ class Prompt(Widget):
 
         self.text = ""
         self.__callback = self.__callback_args = self.__callback_kwargs = None
+        self.result = False
         await self.app.toggle_dialog()
 
     async def watch_result(self, result):

@@ -1,6 +1,7 @@
 import dataclasses
 import enum
 import functools
+import os
 
 import boto3
 import textual.widgets
@@ -15,8 +16,8 @@ class ObjectType(enum.Enum):
     FOLDER = 1
 
 @dataclasses.dataclass
-class S3Object:
-    key: str
+class FileObject:
+    path: str
     size: float
     type: ObjectType
 
@@ -24,13 +25,13 @@ class S3Object:
     def is_dir(self):
         return self.type == ObjectType.FOLDER
 
-class S3Tree(textual.widgets.TreeControl[S3Object]):
-    name="S3Tree"
+class LocalTree(textual.widgets.TreeControl[FileObject]):
+    name="LocalTree"
 
-    def __init__(self, bucket_name: str, name: str = None):
-        self.bucket_name = bucket_name
-        label = bucket_name
-        data = S3Object(key="", size=0, type=ObjectType.FOLDER)
+    def __init__(self, root_path: str, name: str = None):
+        self.root_path = root_path
+        label = root_path
+        data = FileObject(path=root_path, size=0, type=ObjectType.FOLDER)
         super().__init__(label, name=name, data=data)
 
     has_focus: textual.reactive.Reactive[bool] = textual.reactive.Reactive(False)
@@ -42,17 +43,17 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         self.has_focus = False
 
     @property
-    def selected_node(self) -> textual.widgets.TreeNode[S3Object]:
+    def selected_node(self) -> textual.widgets.TreeNode[FileObject]:
         for node in self.nodes.values():
             if node.is_cursor:
                 return node
 
     @selected_node.setter
-    def selected_node(self, node: textual.widgets.TreeNode[S3Object]):
+    def selected_node(self, node: textual.widgets.TreeNode[FileObject]):
         self.cursor = node.id
- 
+    
     @property
-    def selected_object(self) -> S3Object:
+    def selected_object(self) -> FileObject:
         return self.selected_node.data
 
     async def watch_hover_node(self, hover_node: textual.widgets.NodeID) -> None:
@@ -65,7 +66,7 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
     async def on_mount(self) -> None:
         await self.load_objects(self.root)
 
-    def render_node(self, node: textual.widgets.TreeNode[S3Object]) -> rich.console.RenderableType:
+    def render_node(self, node: textual.widgets.TreeNode[FileObject]) -> rich.console.RenderableType:
         return self.render_tree_label(
             node,
             node.data.is_dir,
@@ -78,7 +79,7 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
     @functools.lru_cache(maxsize=1024 * 32)
     def render_tree_label(
         self,
-        node: textual.widgets.TreeNode[S3Object],
+        node: textual.widgets.TreeNode[FileObject],
         is_dir: bool,
         expanded: bool=False,
         is_cursor: bool=False,
@@ -111,39 +112,36 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         icon_label.apply_meta(meta)
         return icon_label
 
-    async def load_objects(self, node: textual.widgets.TreeNode[S3Object]):
+    async def load_objects(self, node: textual.widgets.TreeNode[FileObject]):
         await node.expand(False)
         self.app.refresh(layout=True)
         node.loaded = False
         node.children = []
         node.tree.children = []
 
-        folder = node.data.key
+        folder = node.data.path
+        self.log(folder)
 
-        client = boto3.client('s3')
-        paginator = client.get_paginator('list_objects_v2')
-        result = paginator.paginate(Bucket=self.bucket_name, Delimiter='/', Prefix=folder)
+        path = os.path.join(self.root_path, folder)
+        for _, dirs, files in os.walk(path):
+            for dir in sorted(dirs, key=str.casefold):
+                await node.add(dir, FileObject(os.path.join(path, dir), 0, ObjectType.FOLDER))
 
-        for prefix in result.search('CommonPrefixes'):
-            if not prefix: continue
-            key = prefix.get('Prefix')
-            await node.add(key.replace(folder, '', 1), S3Object(key, 0, ObjectType.FOLDER))
+            for file in sorted(files, key=str.casefold):
+                await node.add(file, FileObject(os.path.join(path, file), 0, ObjectType.FILE))
 
-        for obj in result.search('Contents'):
-            if not obj: continue
-            key = obj.get('Key')
-            await node.add(key.replace(folder, '', 1), S3Object(key, obj.get('Size'), ObjectType.FILE))
+            break
 
         node.loaded = True
         if node.data.is_dir:
             await node.expand()
-            await self.emit(StatusUpdate(self, message=f'Loaded objects in {self.bucket_name}/{folder}'))
+            await self.emit(StatusUpdate(self, message=f'Loaded files in {folder}'))
         else:
-            await self.emit(StatusUpdate(self, message=f'Loaded object {self.bucket_name}/{folder}'))
+            await self.emit(StatusUpdate(self, message=f'Loaded file {folder}'))
 
         self.app.refresh(layout=True)
 
-    async def handle_tree_click(self, message: textual.widgets.TreeClick[S3Object]) -> None:
+    async def handle_tree_click(self, message: textual.widgets.TreeClick[FileObject]) -> None:
         if message.node.data.is_dir:
             if not message.node.loaded:
                 await self.load_objects(message.node)
