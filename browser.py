@@ -55,15 +55,20 @@ class BucketManApp(textual.app.App):
 
     async def action_delete(self) -> None:
         if self.left_pane.window.widget.has_focus:
-            path = [node.data.path for node_id, node in self.directory.nodes.items() if node_id == self.directory.cursor][0]
+            path = self.directory.selected_object.path
             await self.dialog.do_prompt(
                 f"Do you want to delete the path {path}?",
                 self.do_local_delete,
                 path=path
             )
         else:
+            if self.s3tree.selected_object.key:
+                prompt = f"Do you want to delete the object {self.s3tree.selected_object.key}?"
+            else:
+                prompt = f"Do you want to empty the bucket {self.s3tree.bucket_name}?"
+
             await self.dialog.do_prompt(
-                f"Do you want to delete the object {self.s3tree.selected_object.key}?",
+                prompt,
                 self.do_s3_delete,
                 bucket=self.s3tree.bucket_name,
                 key=self.s3tree.selected_object.key
@@ -97,7 +102,7 @@ class BucketManApp(textual.app.App):
             message = MakeCopy(
                 self,
                 src_bucket=None,
-                src_path=[node.data.path for node_id, node in self.directory.nodes.items() if node_id == self.directory.cursor][0],
+                src_path=self.directory.selected_object.path,
                 dst_bucket=self.s3tree.bucket_name,
                 dst_path=os.path.dirname(self.s3tree.selected_object.key),
                 recursive=True
@@ -163,7 +168,6 @@ class BucketManApp(textual.app.App):
 
     async def handle_status_update(self, message: StatusUpdate) -> None:
         await self.status_log.add_status(message.message)
-        self.refresh()
 
     def watch_show_dialog(self, show_bar: bool) -> None:
         self.dialog.animate("layout_offset_y", -(self.view.size.height / 2) + 10 if show_bar else 20)

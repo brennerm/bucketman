@@ -6,6 +6,9 @@ import textual.events
 from rich.console import RenderableType
 import rich.panel
 import rich.table
+import rich.text
+import rich.align
+import rich.layout
 
 import inspect
 
@@ -57,13 +60,18 @@ class Prompt(Widget):
             self.yes.button_style = self.unselected_style
 
     def render(self) -> RenderableType:
-        table = rich.table.Table.grid(padding=(0, 1), expand=True)
-        table.add_column('left')
-        table.add_column('right')
-        table.add_row(self.text)
-        table.add_row(self.yes, self.no)
+        layout = rich.layout.Layout()
+        layout.split_column(
+            rich.align.Align(rich.text.Text(self.text, style="bold"), align="center", vertical="middle"),
+            rich.layout.Layout(name="bottom")
+        )
 
-        return rich.panel.Panel(table)
+        layout["bottom"].split_row(
+            self.yes,
+            self.no,
+        )
+
+        return rich.panel.Panel(layout)
 
     async def do_prompt(self, prompt, callback, *args, **kwargs):
         self.text = prompt
