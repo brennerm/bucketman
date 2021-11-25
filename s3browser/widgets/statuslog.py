@@ -1,11 +1,8 @@
-import collections
-
 from rich.console import RenderableType
-from textual.widget import Widget, watch
+from textual.widget import Widget
 import rich.repr
 import rich.panel
-
-from s3browser.events import StatusUpdate
+import rich.align
 
 
 class StatusLog(Widget):
@@ -13,14 +10,19 @@ class StatusLog(Widget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.lines = collections.deque([])
+        self.lines = []
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "name", self.name
 
     async def add_status(self, message: str) -> None:
-        self.lines.appendleft(message)
+        self.lines.append(message)
         self.refresh()
 
     def render(self) -> RenderableType:
-        return rich.panel.Panel('\n'.join(list(self.lines)), title="Status")
+        visible_lines = self.lines[-(self.size.height - 2):]
+
+        return rich.panel.Panel(
+            rich.align.Align('\n'.join(visible_lines), vertical="bottom")
+            , title="Status"
+            )
