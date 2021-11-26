@@ -4,11 +4,13 @@ import warnings
 
 import boto3
 import botocore.exceptions
+import click
 
 import textual.app
 import textual.widgets
 import textual.views
 import textual.reactive
+from s3browser.widgets.bucket_select import S3BucketSelect
 
 from s3browser.widgets.footer import Footer
 from s3browser.widgets.localtree import LocalTree
@@ -17,15 +19,16 @@ from s3browser.widgets.s3tree import S3Tree
 from s3browser.widgets.statuslog import StatusLog
 from s3browser.events import MakeCopy, StatusUpdate
 
+warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+
 class BucketManApp(textual.app.App):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, bucket: str=None, **kwargs):
         self.left_pane = None
         self.right_pane = None
         self.focused_pane = None
         self.status_log = None
         self.directory = None
-        self.s3tree = None
-        self.bucket_name = 'openwifi-allure-reports'
+        self.bucket_name = bucket
         super().__init__(*args, **kwargs)
 
     show_dialog = textual.reactive.Reactive(False)
@@ -40,21 +43,21 @@ class BucketManApp(textual.app.App):
         await self.bind("d", "delete", "Delete", key_display='d')
 
     async def action_reload(self) -> None:
-        if self.left_pane.window.widget.has_focus:
+        if self.left_pane.window.widget == self.focused:
             await self.left_pane.window.widget.load_objects(self.left_pane.window.widget.selected_node)
-        elif self.right_pane.window.widget.has_focus:
+        elif self.right_pane.window.widget == self.focused:
             await self.right_pane.window.widget.load_objects(self.right_pane.window.widget.selected_node)
 
     async def action_cycle(self) -> None:
-        if self.left_pane.window.widget.has_focus:
+        if self.left_pane.window.widget == self.focused:
             await self.right_pane.window.widget.focus()
             self.focused_pane = self.right_pane
-        elif self.right_pane.window.widget.has_focus:
+        elif self.right_pane.window.widget == self.focused:
             await self.left_pane.window.widget.focus()
             self.focused_pane = self.left_pane
 
     async def action_delete(self) -> None:
-        if self.left_pane.window.widget.has_focus:
+        if self.left_pane.window.widget == self.focused:
             path = self.directory.selected_object.path
             await self.dialog.do_prompt(
                 f"Do you want to delete the path {path}?",
@@ -62,16 +65,16 @@ class BucketManApp(textual.app.App):
                 path=path
             )
         else:
-            if self.s3tree.selected_object.key:
-                prompt = f"Do you want to delete the object {self.s3tree.selected_object.key}?"
+            if self.right_pane.window.widget.selected_object.key:
+                prompt = f"Do you want to delete the object {self.right_pane.window.widget.selected_object.key}?"
             else:
-                prompt = f"Do you want to empty the bucket {self.s3tree.bucket_name}?"
+                prompt = f"Do you want to empty the bucket {self.right_pane.window.widget.bucket_name}?"
 
             await self.dialog.do_prompt(
                 prompt,
                 self.do_s3_delete,
-                bucket=self.s3tree.bucket_name,
-                key=self.s3tree.selected_object.key
+                bucket=self.right_pane.window.widget.bucket_name,
+                key=self.right_pane.window.widget.selected_object.key
             )
 
     async def do_local_delete(self, path) -> None:
@@ -95,23 +98,23 @@ class BucketManApp(textual.app.App):
             await self.handle_status_update(StatusUpdate(self, message=f'Failed to delete S3 object "{bucket}:{key}": {e.response["Error"]["Message"]}'))
         else:
             await self.handle_status_update(StatusUpdate(self, message=f'Successfully deleted S3 object "{bucket}:{key}"'))
-            await self.s3tree.load_objects(self.s3tree.selected_node.parent)
+            await self.right_pane.window.widget.load_objects(self.right_pane.window.widget.selected_node.parent)
 
     async def action_copy(self) -> None:
-        if self.left_pane.window.widget.has_focus:
+        if self.left_pane.window.widget == self.focused:
             message = MakeCopy(
                 self,
                 src_bucket=None,
                 src_path=self.directory.selected_object.path,
-                dst_bucket=self.s3tree.bucket_name,
-                dst_path=os.path.dirname(self.s3tree.selected_object.key),
+                dst_bucket=self.right_pane.window.widget.bucket_name,
+                dst_path=os.path.dirname(self.right_pane.window.widget.selected_object.key),
                 recursive=True
             )
         else:
             message = MakeCopy(
                 self,
-                src_bucket=self.s3tree.bucket_name,
-                src_path=self.s3tree.selected_object.key,
+                src_bucket=self.right_pane.window.widget.bucket_name,
+                src_path=self.right_pane.window.widget.selected_object.key,
                 dst_bucket=None,
                 dst_path=self.directory.data.path,
                 recursive=True
@@ -124,20 +127,20 @@ class BucketManApp(textual.app.App):
         elif message.src_bucket is None and message.dst_bucket is not None:
             key = os.path.join(message.dst_path, os.path.basename(message.src_path))
             await self.dialog.do_prompt(
-                f"Do you want to upload the file {message.src_path} to {self.s3tree.bucket_name}/{key}?",
+                f"Do you want to upload the file {message.src_path} to {self.right_pane.window.widget.bucket_name}/{key}?",
                 self.do_upload,
                 path=message.src_path,
-                bucket=self.s3tree.bucket_name,
+                bucket=self.right_pane.window.widget.bucket_name,
                 key=key
             )
         # download
         elif message.src_bucket is not None and message.dst_bucket is None:
             path = os.path.join(message.dst_path, os.path.basename(message.src_path))
             await self.dialog.do_prompt(
-                f"Do you want to download the object {self.s3tree.bucket_name}/{self.s3tree.selected_object.key} to {path}?",
+                f"Do you want to download the object {self.right_pane.window.widget.bucket_name}/{self.right_pane.window.widget.selected_object.key} to {path}?",
                 self.do_download,
-                bucket=self.s3tree.bucket_name,
-                key=self.s3tree.selected_object.key,
+                bucket=self.right_pane.window.widget.bucket_name,
+                key=self.right_pane.window.widget.selected_object.key,
                 path=path
             )
         # copy from one bucket to another
@@ -152,7 +155,7 @@ class BucketManApp(textual.app.App):
         except botocore.exceptions.ClientError as e:
             await self.handle_status_update(StatusUpdate(self, message=f'Failed to upload file {path} to {bucket}/{key}: {e.response["Error"]["Message"]}'))
         else:
-            await self.s3tree.load_objects(self.s3tree.selected_node.parent)
+            await self.right_pane.window.widget.load_objects(self.right_pane.window.widget.selected_node.parent)
             await self.handle_status_update(StatusUpdate(self, message=f'Uploaded file {path} to {bucket}/{key}'))
 
     async def do_download(self, bucket, key, path) -> None:
@@ -179,6 +182,12 @@ class BucketManApp(textual.app.App):
         else:
             await self.focused_pane.window.widget.focus()
 
+    async def bucket_selected(self):
+        bucket_name = self.focused_pane.window.widget.selected_bucket
+        s3tree = S3Tree(bucket_name, name="s3")
+        await self.focused_pane.update(s3tree)
+        await self.focused_pane.window.widget.focus()
+
     async def on_mount(self) -> None:
         self.dialog = Prompt("", name="prompt")
         await self.view.dock(self.dialog, edge="bottom", size=20, z=1)
@@ -187,10 +196,12 @@ class BucketManApp(textual.app.App):
         self.status_log = StatusLog()
         self.directory = LocalTree(os.getcwd())
         self.directory.show_cursor = True
-        self.s3tree = S3Tree(self.bucket_name, name="s3")
-        self.s3tree.show_cursor = True
         self.left_pane = textual.widgets.ScrollView(self.directory)
-        self.right_pane = textual.widgets.ScrollView(self.s3tree)
+        if self.bucket_name:
+            s3tree = S3Tree(self.bucket_name, name="s3")
+            self.right_pane = textual.widgets.ScrollView(s3tree)
+        else:
+            self.right_pane = textual.widgets.ScrollView(S3BucketSelect(self.bucket_selected))
 
         grid = await self.view.dock_grid()
 
@@ -217,6 +228,14 @@ class BucketManApp(textual.app.App):
         await self.right_pane.window.widget.focus()
         self.focused_pane = self.right_pane
 
+@click.command()
+@click.option('--endpoint-url', help="UNUSED")
+@click.option('--client-id', help="UNUSED")
+@click.option('--client-secret', help="UNUSED")
+@click.option('--bucket', help="The S3 bucket to open.")
+@click.option('--debug', is_flag=True, help='Enable debug logs.')
+def main(endpoint_url, client_id, client_secret, bucket, debug):
+    BucketManApp.run(title="bucketman", log="bucketman.log" if debug else None, bucket=bucket)
 
-warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
-BucketManApp.run(title="bucketman", log="textual.log")
+if __name__ == '__main__':
+    main()
