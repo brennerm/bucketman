@@ -42,7 +42,7 @@ jobs:
       - name: publish package
         uses: pypa/gh-action-pypi-publish@v1.4.2
         with:
-          user: __token__
+          user: bucketman
           password: ${{ secrets.PYPI_API_TOKEN }}
       - name: create Release
         uses: actions/create-release@v1
