@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 click = "*"
 boto3 = "*"
+textual = "*"
 
 [dev-packages]
 
