@@ -1,25 +1,15 @@
 import os
 import shutil
-import warnings
 
 import boto3
 import botocore.exceptions
-import click
-
 import textual.app
-import textual.widgets
-import textual.views
-import textual.reactive
-from s3browser.widgets.bucket_select import S3BucketSelect
 
-from s3browser.widgets.footer import Footer
-from s3browser.widgets.localtree import LocalTree
-from s3browser.widgets.prompt import Prompt
-from s3browser.widgets.s3tree import S3Tree
-from s3browser.widgets.statuslog import StatusLog
-from s3browser.events import MakeCopy, StatusUpdate
+from bucketman.constants import AWS_HEX_COLOR_CODE
+from bucketman.events import MakeCopy, StatusUpdate
+from bucketman.widgets import (Footer, LocalTree, Prompt, S3BucketSelect,
+                               S3Tree, StatusLog)
 
-warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
 class BucketManApp(textual.app.App):
     def __init__(self, *args, bucket: str=None, **kwargs):
@@ -36,11 +26,11 @@ class BucketManApp(textual.app.App):
     async def on_load(self) -> None:
         await self.bind("escape", "quit", "Quit")
         await self.bind("ctrl+i", "cycle", "Cycle", key_display='TAB')
-        await self.bind("o", "open", "Open", key_display='o')
-        await self.bind("c", "copy", "Copy", key_display='c')
-        await self.bind("r", "rename", "Rename", key_display='r')
+        await self.bind("b", "select_bucket", "Select Bucket", key_display='b')
         await self.bind("R", "reload", "Reload")
-        await self.bind("d", "delete", "Delete", key_display='d')
+        #await self.bind("c", "copy", "Copy", key_display='c')
+        #await self.bind("r", "rename", "Rename", key_display='r')
+        #await self.bind("d", "delete", "Delete", key_display='d')
 
     async def action_reload(self) -> None:
         if self.left_pane.window.widget == self.focused:
@@ -55,6 +45,15 @@ class BucketManApp(textual.app.App):
         elif self.right_pane.window.widget == self.focused:
             await self.left_pane.window.widget.focus()
             self.focused_pane = self.left_pane
+
+    async def action_select_bucket(self) -> None:
+        if self.left_pane.window.widget == self.focused:
+            pass
+        elif self.right_pane.window.widget == self.focused:
+            await self.right_pane.update(
+                S3BucketSelect(self.bucket_selected)
+            )
+            await self.right_pane.window.widget.focus()
 
     async def action_delete(self) -> None:
         if self.left_pane.window.widget == self.focused:
@@ -90,14 +89,16 @@ class BucketManApp(textual.app.App):
             await self.directory.load_objects(self.directory.selected_node.parent)
 
     async def do_s3_delete(self, bucket, key) -> None:
-        client = boto3.client('s3')
+        s3 = boto3.resource('s3')
+        bucket = s3.Bucket(bucket)
 
         try:
-            client.delete_object(Bucket=bucket, Key=key)
+            bucket.objects.filter(Prefix=key).delete()
+            await self.handle_status_update(StatusUpdate(self, message=f'Deleted S3 object(s) "{bucket}:{key}"'))
+
         except botocore.exceptions.ClientError as e:
-            await self.handle_status_update(StatusUpdate(self, message=f'Failed to delete S3 object "{bucket}:{key}": {e.response["Error"]["Message"]}'))
+            await self.handle_status_update(StatusUpdate(self, message=f'Failed to delete S3 object(s) "{bucket}:{key}": {e.response["Error"]["Message"]}'))
         else:
-            await self.handle_status_update(StatusUpdate(self, message=f'Successfully deleted S3 object "{bucket}:{key}"'))
             await self.right_pane.window.widget.load_objects(self.right_pane.window.widget.selected_node.parent)
 
     async def action_copy(self) -> None:
@@ -151,12 +152,20 @@ class BucketManApp(textual.app.App):
         client = boto3.client('s3')
 
         try:
-            client.upload_file(path, bucket, key)
+            if os.path.isdir(path):
+                for root, dirs, files in os.walk(path):
+                    for file in files:
+                        src = os.path.join(root, file)
+                        dst = os.path.normpath(os.path.join(key, os.path.relpath(root, path),file))
+                        client.upload_file(src, bucket, dst)
+                        await self.handle_status_update(StatusUpdate(self, message=f'Uploaded file {src} to {bucket}/{dst}'))
+            else:
+                client.upload_file(path, bucket, key)
         except botocore.exceptions.ClientError as e:
             await self.handle_status_update(StatusUpdate(self, message=f'Failed to upload file {path} to {bucket}/{key}: {e.response["Error"]["Message"]}'))
         else:
-            await self.right_pane.window.widget.load_objects(self.right_pane.window.widget.selected_node.parent)
-            await self.handle_status_update(StatusUpdate(self, message=f'Uploaded file {path} to {bucket}/{key}'))
+            node_to_reload = self.right_pane.window.widget.selected_node.parent if self.right_pane.window.widget.selected_node.parent else self.right_pane.window.widget.selected_node
+            await self.right_pane.window.widget.load_objects(node_to_reload)
 
     async def do_download(self, bucket, key, path) -> None:
         client = boto3.client('s3')
@@ -196,12 +205,12 @@ class BucketManApp(textual.app.App):
         self.status_log = StatusLog()
         self.directory = LocalTree(os.getcwd())
         self.directory.show_cursor = True
-        self.left_pane = textual.widgets.ScrollView(self.directory)
+        self.left_pane = textual.widgets.ScrollView(self.directory, name="left_pane")
         if self.bucket_name:
-            s3tree = S3Tree(self.bucket_name, name="s3")
-            self.right_pane = textual.widgets.ScrollView(s3tree)
+            widget = S3Tree(self.bucket_name, name="s3")
         else:
-            self.right_pane = textual.widgets.ScrollView(S3BucketSelect(self.bucket_selected))
+            widget = S3BucketSelect(self.bucket_selected)
+        self.right_pane = textual.widgets.ScrollView(widget, name="right_pane")
 
         grid = await self.view.dock_grid()
 
@@ -219,7 +228,7 @@ class BucketManApp(textual.app.App):
             header="left-start|right-end,header",
         )
 
-        grid.place(header=textual.widgets.Header(tall=False, style="black on #FF9900"))
+        grid.place(header=textual.widgets.Header(tall=False, style=f"black on {AWS_HEX_COLOR_CODE}"))
         grid.place(left=self.left_pane)
         grid.place(right=self.right_pane)
         grid.place(status=self.status_log)
@@ -228,14 +237,3 @@ class BucketManApp(textual.app.App):
         await self.right_pane.window.widget.focus()
         self.focused_pane = self.right_pane
 
-@click.command()
-@click.option('--endpoint-url', help="UNUSED")
-@click.option('--client-id', help="UNUSED")
-@click.option('--client-secret', help="UNUSED")
-@click.option('--bucket', help="The S3 bucket to open.")
-@click.option('--debug', is_flag=True, help='Enable debug logs.')
-def main(endpoint_url, client_id, client_secret, bucket, debug):
-    BucketManApp.run(title="bucketman", log="bucketman.log" if debug else None, bucket=bucket)
-
-if __name__ == '__main__':
-    main()

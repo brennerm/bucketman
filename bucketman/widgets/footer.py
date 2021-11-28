@@ -6,6 +6,8 @@ import rich.repr
 
 from textual.widget import Widget
 
+from bucketman.constants import AWS_HEX_COLOR_CODE
+
 
 @rich.repr.auto
 class Footer(Widget):
@@ -21,7 +23,7 @@ class Footer(Widget):
     def make_key_text(self) -> Text:
         """Create text containing all the keys."""
         text = Text(
-            style="black on #FF9900",
+            style=f"black on {AWS_HEX_COLOR_CODE}",
             no_wrap=True,
             overflow="ellipsis",
             justify="left",

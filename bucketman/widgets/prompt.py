@@ -1,3 +1,5 @@
+import inspect
+
 import textual
 import textual.reactive
 from textual.widget import Widget
@@ -10,11 +12,11 @@ import rich.text
 import rich.align
 import rich.layout
 
-import inspect
+from bucketman.constants import AWS_HEX_COLOR_CODE
 
 class Prompt(Widget):
-    selected_style = "bold black on #FF9900"
-    unselected_style = "#FF9900 on black"
+    selected_style = f"bold black on {AWS_HEX_COLOR_CODE}"
+    unselected_style = f"{AWS_HEX_COLOR_CODE} on black"
 
     def __init__(self, text: str, name: str = None) -> None:
         self.text = text

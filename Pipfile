@@ -4,9 +4,8 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-boto3 = "*"
-textual = "*"
 click = "*"
+boto3 = "*"
 
 [dev-packages]
 
