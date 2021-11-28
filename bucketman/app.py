@@ -8,7 +8,7 @@ import textual.app
 from bucketman.constants import AWS_HEX_COLOR_CODE
 from bucketman.events import MakeCopy, StatusUpdate
 from bucketman.widgets import (Footer, LocalTree, Prompt, S3BucketSelect,
-                               S3Tree, StatusLog)
+                               S3Tree, StatusLog, Header)
 
 
 class BucketManApp(textual.app.App):
@@ -228,7 +228,7 @@ class BucketManApp(textual.app.App):
             header="left-start|right-end,header",
         )
 
-        grid.place(header=textual.widgets.Header(tall=False, style=f"black on {AWS_HEX_COLOR_CODE}"))
+        grid.place(header=Header(style=f"black on {AWS_HEX_COLOR_CODE}"))
         grid.place(left=self.left_pane)
         grid.place(right=self.right_pane)
         grid.place(status=self.status_log)
