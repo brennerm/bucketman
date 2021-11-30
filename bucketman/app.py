@@ -33,10 +33,10 @@ class BucketManApp(textual.app.App):
         #await self.bind("d", "delete", "Delete", key_display='d')
 
     async def action_reload(self) -> None:
-        if self.left_pane.window.widget == self.focused:
-            await self.left_pane.window.widget.load_objects(self.left_pane.window.widget.selected_node)
-        elif self.right_pane.window.widget == self.focused:
-            await self.right_pane.window.widget.load_objects(self.right_pane.window.widget.selected_node)
+        try:
+            await self.focused.load_objects(self.focused.selected_node)
+        except AttributeError:
+            pass
 
     async def action_cycle(self) -> None:
         if self.left_pane.window.widget == self.focused:
