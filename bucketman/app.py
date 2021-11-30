@@ -4,6 +4,7 @@ import shutil
 import boto3
 import botocore.exceptions
 import textual.app
+import textual.binding
 import textual.widgets
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
@@ -19,42 +20,43 @@ class BucketManApp(textual.app.App):
         self.focused_pane = None
         self.status_log = None
         self.directory = None
+        self.footer = Footer()
         self.bucket_name = bucket
+        self.default_bindings = [
+            textual.binding.Binding("ctrl+c", "quit", "", allow_forward=False),
+            textual.binding.Binding("escape", "quit", "Quit", show=True),
+            textual.binding.Binding("ctrl+i", "cycle", "Cycle", show=True, key_display='TAB')
+        ]
         super().__init__(*args, **kwargs)
 
     show_dialog = textual.reactive.Reactive(False)
 
-    async def on_load(self) -> None:
-        await self.bind("escape", "quit", "Quit")
-        await self.bind("ctrl+i", "cycle", "Cycle", key_display='TAB')
-        await self.bind("b", "change_bucket", "Change Bucket", key_display='b')
-        await self.bind("R", "reload", "Reload")
-        #await self.bind("c", "copy", "Copy", key_display='c')
-        #await self.bind("r", "rename", "Rename", key_display='r')
-        #await self.bind("d", "delete", "Delete", key_display='d')
+    async def load_bindings(self):
+        new_bindings = list(self.default_bindings)
 
-    async def action_reload(self) -> None:
         try:
-            await self.focused.load_objects(self.focused.selected_node)
+            new_bindings += self.focused.bindings
         except AttributeError:
             pass
 
+        self.bindings = textual.binding.Bindings()
+        for binding in new_bindings:
+            self.bindings.keys[binding.key] = binding
+
+        self.footer.refresh(layout=True)
+
+    async def on_load(self) -> None:
+        await self.load_bindings()
+ 
     async def action_cycle(self) -> None:
         if self.left_pane.window.widget == self.focused:
             await self.right_pane.window.widget.focus()
+            await self.load_bindings()
             self.focused_pane = self.right_pane
         elif self.right_pane.window.widget == self.focused:
             await self.left_pane.window.widget.focus()
+            await self.load_bindings()
             self.focused_pane = self.left_pane
-
-    async def action_change_bucket(self) -> None:
-        if self.left_pane.window.widget == self.focused:
-            pass
-        elif self.right_pane.window.widget == self.focused:
-            await self.right_pane.update(
-                S3BucketSelect(self.bucket_selected)
-            )
-            await self.right_pane.window.widget.focus()
 
     async def action_delete(self) -> None:
         if self.left_pane.window.widget == self.focused:
@@ -192,12 +194,19 @@ class BucketManApp(textual.app.App):
         else:
             await self.focused_pane.window.widget.focus()
 
+    async def show_select_bucket(self) -> None:
+        await self.focused_pane.update(
+            S3BucketSelect(self.bucket_selected)
+        )
+        await self.focused_pane.window.widget.focus()
+        await self.load_bindings()
+
     async def bucket_selected(self):
         bucket_name = self.focused_pane.window.widget.selected_bucket
         s3tree = S3Tree(bucket_name, name="s3")
         await self.focused_pane.update(s3tree)
         await self.focused_pane.window.widget.focus()
-        self.focused = s3tree
+        await self.load_bindings()
 
     async def on_mount(self) -> None:
         self.dialog = Prompt("", name="prompt")
@@ -217,7 +226,7 @@ class BucketManApp(textual.app.App):
         await self.right_pane.window.widget.focus()
         self.focused_pane = self.right_pane
 
-        grid = await self.view.dock_grid()
+        grid = await self.view.dock_grid(name='grid')
 
         grid.add_column("left")
         grid.add_column("middle", size=1)
@@ -240,4 +249,4 @@ class BucketManApp(textual.app.App):
         grid.place(middle=VerticalDivider())
         grid.place(right=self.right_pane)
         grid.place(status=self.status_log)
-        grid.place(footer=Footer())
+        grid.place(footer=self.footer)

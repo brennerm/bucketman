@@ -1,10 +1,11 @@
+from __future__ import annotations
 import dataclasses
 import enum
 import functools
 
 import botocore
 import boto3
-from botocore import exceptions
+import textual.binding
 import textual.widgets
 import textual.reactive
 import rich.console
@@ -58,6 +59,13 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
     def selected_object(self) -> S3Object:
         return self.selected_node.data
 
+    @property
+    def bindings(self) -> list[textual.binding.Binding]:
+        return [
+            textual.binding.Binding('R', "noop", "Reload", show=True),
+            textual.binding.Binding('b', "noop", "Change Bucket", show=True, key_display='b'),
+        ]
+
     async def watch_hover_node(self, hover_node: textual.widgets.NodeID) -> None:
         for node in self.nodes.values():
             node.tree.guide_style = (
@@ -67,6 +75,12 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
 
     async def on_mount(self) -> None:
         await self.load_objects(self.root)
+
+    async def key_R(self) -> None:
+        await self.load_objects(self.selected_node)
+
+    async def key_b(self) -> None:
+        await self.app.show_select_bucket()
 
     def render_node(self, node: textual.widgets.TreeNode[S3Object]) -> rich.console.RenderableType:
         return self.render_tree_label(

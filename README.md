@@ -4,7 +4,6 @@ A terminal application for exploring and interacting (coming soon) with S3 bucke
 
 ![screenshot](.screenshot.png)
 
-
 ## installation
 
 ```pip install bucketman```

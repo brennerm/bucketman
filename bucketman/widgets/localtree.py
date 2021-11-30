@@ -1,3 +1,4 @@
+from __future__ import annotations
 import dataclasses
 import enum
 import functools
@@ -56,6 +57,12 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
     def selected_object(self) -> FileObject:
         return self.selected_node.data
 
+    @property
+    def bindings(self) -> list[textual.binding.Binding]:
+        return [
+            textual.binding.Binding('R', "noop", "Reload", show=True),
+        ]
+
     async def watch_hover_node(self, hover_node: textual.widgets.NodeID) -> None:
         for node in self.nodes.values():
             node.tree.guide_style = (
@@ -65,6 +72,9 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
 
     async def on_mount(self) -> None:
         await self.load_objects(self.root)
+
+    async def key_R(self) -> None:
+        await self.load_objects(self.selected_node)
 
     def render_node(self, node: textual.widgets.TreeNode[FileObject]) -> rich.console.RenderableType:
         return self.render_tree_label(

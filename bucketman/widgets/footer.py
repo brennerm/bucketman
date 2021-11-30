@@ -45,6 +45,4 @@ class Footer(Widget):
         return text
 
     def render(self) -> RenderableType:
-        if self._key_text is None:
-            self._key_text = self.make_key_text()
-        return self._key_text
+        return self.make_key_text()
