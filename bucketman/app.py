@@ -9,7 +9,7 @@ import textual.widgets
 from bucketman.constants import AWS_HEX_COLOR_CODE
 from bucketman.events import MakeCopy, StatusUpdate
 from bucketman.widgets import (Footer, LocalTree, Prompt, S3BucketSelect,
-                               S3Tree, StatusLog, Header)
+                               S3Tree, StatusLog, Header, VerticalDivider)
 
 
 class BucketManApp(textual.app.App):
@@ -220,6 +220,7 @@ class BucketManApp(textual.app.App):
         grid = await self.view.dock_grid()
 
         grid.add_column("left")
+        grid.add_column("middle", size=1)
         grid.add_column("right")
         grid.add_row("header", size=1)
         grid.add_row("pane")
@@ -228,6 +229,7 @@ class BucketManApp(textual.app.App):
         grid.add_areas(
             header="left-start|right-end,header",
             left="left,pane",
+            middle="middle,pane",
             right="right,pane",
             status="left-start|right-end,status",
             footer="left-start|right-end,footer",
@@ -235,6 +237,7 @@ class BucketManApp(textual.app.App):
 
         grid.place(header=Header(style=f"black on {AWS_HEX_COLOR_CODE}"))
         grid.place(left=self.left_pane)
+        grid.place(middle=VerticalDivider())
         grid.place(right=self.right_pane)
         grid.place(status=self.status_log)
         grid.place(footer=Footer())

@@ -7,9 +7,7 @@ import textual.reactive
 import textual.widget
 import textual.events
 import rich.console
-import rich.panel
-import rich.table
-import rich.text
+import rich.padding
 import rich.align
 import rich.layout
 
@@ -86,6 +84,7 @@ class S3BucketSelect(textual.widget.Widget):
                 rich.align.Align("No S3 buckets found.", vertical='middle', align='center', height=3, style=S3BucketSelect.selected_style)
             )
         else:
+            header = rich.align.Align("Select S3 bucket", vertical='middle', align='center', height=3, style="bold")
             buttons = [
                 rich.align.Align(
                     bucket,
@@ -95,11 +94,9 @@ class S3BucketSelect(textual.widget.Widget):
                     style=S3BucketSelect.selected_style if index == self.selected_index and self.has_focus else S3BucketSelect.unselected_style
                 ) for index, bucket in enumerate(self.buckets)
             ]
+
             layout.split_column(
-                rich.console.Group(*buttons)
+                rich.console.Group(*([header] + buttons))
             )
 
-        return rich.panel.Panel(
-            layout,
-            title='Select S3 bucket',
-        )
+        return rich.padding.Padding(layout, (0, 1, 1, 0))

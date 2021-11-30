@@ -135,9 +135,9 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         result = paginator.paginate(Bucket=self.bucket_name, Delimiter='/', Prefix=prefix)
 
         try:
-            for prefix in result.search('CommonPrefixes'):
-                if not prefix: continue
-                key = prefix.get('Prefix')
+            for common_prefix in result.search('CommonPrefixes'):
+                if not common_prefix: continue
+                key = common_prefix.get('Prefix')
                 await node.add(key.replace(prefix, '', 1), S3Object(key, 0, ObjectType.FOLDER))
 
             for obj in result.search('Contents'):
