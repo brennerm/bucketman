@@ -117,7 +117,7 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         return icon_label
 
     async def load_objects(self, node: textual.widgets.TreeNode[S3Object]):
-        #await node.expand(False)
+        await node.expand(False)
         self.app.refresh(layout=True)
         node.loaded = False
         node.children = []

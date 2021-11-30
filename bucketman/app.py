@@ -4,6 +4,7 @@ import shutil
 import boto3
 import botocore.exceptions
 import textual.app
+import textual.widgets
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
 from bucketman.events import MakeCopy, StatusUpdate
@@ -26,7 +27,7 @@ class BucketManApp(textual.app.App):
     async def on_load(self) -> None:
         await self.bind("escape", "quit", "Quit")
         await self.bind("ctrl+i", "cycle", "Cycle", key_display='TAB')
-        await self.bind("b", "select_bucket", "Select Bucket", key_display='b')
+        await self.bind("b", "change_bucket", "Change Bucket", key_display='b')
         await self.bind("R", "reload", "Reload")
         #await self.bind("c", "copy", "Copy", key_display='c')
         #await self.bind("r", "rename", "Rename", key_display='r')
@@ -46,7 +47,7 @@ class BucketManApp(textual.app.App):
             await self.left_pane.window.widget.focus()
             self.focused_pane = self.left_pane
 
-    async def action_select_bucket(self) -> None:
+    async def action_change_bucket(self) -> None:
         if self.left_pane.window.widget == self.focused:
             pass
         elif self.right_pane.window.widget == self.focused:
@@ -196,6 +197,7 @@ class BucketManApp(textual.app.App):
         s3tree = S3Tree(bucket_name, name="s3")
         await self.focused_pane.update(s3tree)
         await self.focused_pane.window.widget.focus()
+        self.focused = s3tree
 
     async def on_mount(self) -> None:
         self.dialog = Prompt("", name="prompt")
@@ -212,6 +214,9 @@ class BucketManApp(textual.app.App):
             widget = S3BucketSelect(self.bucket_selected)
         self.right_pane = textual.widgets.ScrollView(widget, name="right_pane")
 
+        await self.right_pane.window.widget.focus()
+        self.focused_pane = self.right_pane
+
         grid = await self.view.dock_grid()
 
         grid.add_column("left")
@@ -221,11 +226,11 @@ class BucketManApp(textual.app.App):
         grid.add_row("status", size=6)
         grid.add_row("footer", size=1)
         grid.add_areas(
+            header="left-start|right-end,header",
             left="left,pane",
             right="right,pane",
             status="left-start|right-end,status",
             footer="left-start|right-end,footer",
-            header="left-start|right-end,header",
         )
 
         grid.place(header=Header(style=f"black on {AWS_HEX_COLOR_CODE}"))
@@ -233,7 +238,3 @@ class BucketManApp(textual.app.App):
         grid.place(right=self.right_pane)
         grid.place(status=self.status_log)
         grid.place(footer=Footer())
-
-        await self.right_pane.window.widget.focus()
-        self.focused_pane = self.right_pane
-

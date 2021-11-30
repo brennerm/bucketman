@@ -33,7 +33,7 @@ class Header(textual.widget.Widget):
         header_table.add_column("title", justify="center", ratio=1)
         header_table.add_column("built", justify="right", width=32)
         header_table.add_row(
-            "🪣", self.full_title, "🔨 with 💗 by [link=https://brennerm.github.io/about.html]brennerm[/link]"
+            "🪣", self.full_title, "🔨 by [link=https://brennerm.github.io/about.html]brennerm[/link]"
         )
         return header_table
 

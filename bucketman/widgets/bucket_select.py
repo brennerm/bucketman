@@ -51,23 +51,23 @@ class S3BucketSelect(textual.widget.Widget):
         except botocore.exceptions.ClientError:
             self.app.panic("Bucketman is unable to list your S3 buckets. Make sure your user has the required permissions or pass a bucket name using the --bucket option.")
 
-
     async def on_key(self, event: textual.events.Key) -> None:
         await self.dispatch_key(event)
 
     async def key_up(self, event: textual.events.Key) -> None:
         if self.selected_index > 0:
             self.selected_index -= 1
+
         self.refresh()
 
     async def key_down(self, event: textual.events.Key) -> None:
         if self.selected_index < len(self.buckets) - 1:
             self.selected_index += 1
+
         self.refresh()
 
     async def key_enter(self, event: textual.events.Key) -> None:
         event.prevent_default().stop()
-        pass
         if self.selected_bucket and self.__callback is not None:
             if inspect.iscoroutinefunction(self.__callback):
                 await self.__callback(*self.__callback_args, **self.__callback_kwargs)
@@ -101,5 +101,5 @@ class S3BucketSelect(textual.widget.Widget):
 
         return rich.panel.Panel(
             layout,
-            title='Select S3 bucket'
+            title='Select S3 bucket',
         )
