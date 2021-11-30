@@ -105,6 +105,8 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
 
         if is_cursor and has_focus:
             label.stylize("reverse")
+        elif is_cursor:
+            label.stylize("reverse dim")
 
         icon_label = rich.text.Text(f"{icon} ", no_wrap=True, overflow="ellipsis") + label
         icon_label.apply_meta(meta)

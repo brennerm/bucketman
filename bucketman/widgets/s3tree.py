@@ -2,7 +2,9 @@ import dataclasses
 import enum
 import functools
 
+import botocore
 import boto3
+from botocore import exceptions
 import textual.widgets
 import textual.reactive
 import rich.console
@@ -111,6 +113,8 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
 
         if is_cursor and has_focus:
             label.stylize("reverse")
+        elif is_cursor:
+            label.stylize("reverse dim")
 
         icon_label = rich.text.Text(f"{icon} ", no_wrap=True, overflow="ellipsis") + label
         icon_label.apply_meta(meta)
@@ -119,32 +123,36 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
     async def load_objects(self, node: textual.widgets.TreeNode[S3Object]):
         await node.expand(False)
         self.app.refresh(layout=True)
+
         node.loaded = False
         node.children = []
         node.tree.children = []
 
-        folder = node.data.key
+        prefix = node.data.key
 
         client = boto3.client('s3')
         paginator = client.get_paginator('list_objects_v2')
-        result = paginator.paginate(Bucket=self.bucket_name, Delimiter='/', Prefix=folder)
+        result = paginator.paginate(Bucket=self.bucket_name, Delimiter='/', Prefix=prefix)
 
-        for prefix in result.search('CommonPrefixes'):
-            if not prefix: continue
-            key = prefix.get('Prefix')
-            await node.add(key.replace(folder, '', 1), S3Object(key, 0, ObjectType.FOLDER))
+        try:
+            for prefix in result.search('CommonPrefixes'):
+                if not prefix: continue
+                key = prefix.get('Prefix')
+                await node.add(key.replace(prefix, '', 1), S3Object(key, 0, ObjectType.FOLDER))
 
-        for obj in result.search('Contents'):
-            if not obj: continue
-            key = obj.get('Key')
-            await node.add(key.replace(folder, '', 1), S3Object(key, obj.get('Size'), ObjectType.FILE))
+            for obj in result.search('Contents'):
+                if not obj: continue
+                key = obj.get('Key')
+                await node.add(key.replace(prefix, '', 1), S3Object(key, obj.get('Size'), ObjectType.FILE))
+        except botocore.exceptions.ClientError:
+            self.app.panic(f'Failed to load contents of bucket "{self.bucket_name}". Make sure the bucket exists and you have permission to access it.')
 
         node.loaded = True
         if node.data.is_dir:
             await node.expand()
-            await self.emit(StatusUpdate(self, message=f'Loaded objects in {self.bucket_name}/{folder}'))
+            await self.emit(StatusUpdate(self, message=f'Loaded objects in {self.bucket_name}/{prefix}'))
         else:
-            await self.emit(StatusUpdate(self, message=f'Loaded object {self.bucket_name}/{folder}'))
+            await self.emit(StatusUpdate(self, message=f'Loaded object {self.bucket_name}/{prefix}'))
 
         self.show_cursor = True
         self.app.refresh(layout=True)

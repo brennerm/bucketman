@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - prevent crash on reload in certain scenarios
+- exit gracefully when S3 bucket can't be accessed
 
 ## [0.1.0] - 2021-11-28
 
