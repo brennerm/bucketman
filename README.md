@@ -6,7 +6,16 @@ A terminal application for exploring and interacting (coming soon) with S3 bucke
 
 ## installation
 
-```pip install bucketman```
+```bash
+$ pip install bucketman
+$ bucketman --help
+```
+
+## authentication
+
+bucketman uses the boto3 library for interacting with your S3 buckets. Thus it supports the same ways of [providing your credentials](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html).
+
+Additionally you can pass your access and secret key using the `--access-key-id` and `--secret-access-key` parameters as well as providing a custom endpoint URL with `--endpoint-url` for non-AWS S3 buckets.
 
 ## features
 
