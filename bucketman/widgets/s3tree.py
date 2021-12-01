@@ -3,7 +3,7 @@ import dataclasses
 import enum
 import functools
 
-import botocore
+import botocore.exceptions
 import textual.binding
 import textual.widgets
 import textual.reactive
@@ -63,6 +63,7 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         return [
             textual.binding.Binding('R', "noop", "Reload", show=True),
             textual.binding.Binding('b', "noop", "Change Bucket", show=True, key_display='b'),
+            textual.binding.Binding('d', "noop", "Delete", show=True, key_display='d'),
         ]
 
     async def watch_hover_node(self, hover_node: textual.widgets.NodeID) -> None:
@@ -80,6 +81,32 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
 
     async def key_b(self) -> None:
         await self.app.show_select_bucket()
+
+    async def key_d(self):
+        if self.selected_object.key:
+            if self.selected_object.type == ObjectType.FOLDER:
+                prompt = f"Do you want to delete all objects with the prefix {self.selected_object.key}?"
+            elif self.selected_object.type == ObjectType.FILE:
+                prompt = f"Do you want to delete the object {self.selected_object.key}?"
+        else:
+            prompt = f"Do you want to empty the bucket {self.bucket_name}?"
+
+        await self.app.dialog.do_prompt(
+            prompt,
+            self.delete_prefix_or_object,
+            prefix_or_key=self.selected_object.key
+        )
+
+    async def delete_prefix_or_object(self, prefix_or_key):
+        bucket = self.app.s3_resource.Bucket(self.bucket_name)
+
+        try:
+            bucket.objects.filter(Prefix=prefix_or_key).delete()
+        except botocore.exceptions.ClientError as e:
+            await self.app.handle_status_update(StatusUpdate(self, message=f'Failed to delete S3 object(s) "{self.bucket_name}/{prefix_or_key}": {e.response["Error"]["Message"]}'))
+
+        await self.app.handle_status_update(StatusUpdate(self, message=f'Deleted S3 object(s) "{self.bucket_name}/{prefix_or_key}"'))
+        await self.load_objects(self.selected_node.parent)
 
     def render_node(self, node: textual.widgets.TreeNode[S3Object]) -> rich.console.RenderableType:
         return self.render_tree_label(
@@ -134,6 +161,9 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         return icon_label
 
     async def load_objects(self, node: textual.widgets.TreeNode[S3Object]):
+        if node is None:
+            node = self.root
+
         await node.expand(False)
         self.app.refresh(layout=True)
 

@@ -123,6 +123,9 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
         return icon_label
 
     async def load_objects(self, node: textual.widgets.TreeNode[FileObject]):
+        if node is None:
+            node = self.root
+
         await node.expand(False)
         self.app.refresh(layout=True)
         node.loaded = False

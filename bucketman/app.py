@@ -94,18 +94,6 @@ class BucketManApp(textual.app.App):
                 self.do_local_delete,
                 path=path
             )
-        else:
-            if self.right_widget.selected_object.key:
-                prompt = f"Do you want to delete the object {self.right_widget.selected_object.key}?"
-            else:
-                prompt = f"Do you want to empty the bucket {self.right_widget.bucket_name}?"
-
-            await self.dialog.do_prompt(
-                prompt,
-                self.do_s3_delete,
-                bucket=self.right_widget.bucket_name,
-                key=self.right_widget.selected_object.key
-            )
 
     async def do_local_delete(self, path) -> None:
         try:
@@ -118,18 +106,6 @@ class BucketManApp(textual.app.App):
         else:
             await self.handle_status_update(StatusUpdate(self, message=f'Successfully deleted path "{path}"'))
             await self.left_widget.load_objects(self.left_widget.selected_node.parent)
-
-    async def do_s3_delete(self, bucket, key) -> None:
-        bucket = self.s3_resource.Bucket(bucket)
-
-        try:
-            bucket.objects.filter(Prefix=key).delete()
-            await self.handle_status_update(StatusUpdate(self, message=f'Deleted S3 object(s) "{bucket}:{key}"'))
-
-        except botocore.exceptions.ClientError as e:
-            await self.handle_status_update(StatusUpdate(self, message=f'Failed to delete S3 object(s) "{bucket}:{key}": {e.response["Error"]["Message"]}'))
-        else:
-            await self.right_widget.load_objects(self.right_widget.selected_node.parent)
 
     async def action_copy(self) -> None:
         if self.left_widget == self.focused:
