@@ -1,8 +1,8 @@
-# bucketman
+# bucketman <img src="img/logo.png" width="20px">
 
 A terminal application for exploring and interacting (coming soon) with S3 buckets.
 
-![screenshot](.screenshot.png)
+![screenshot](img/screenshot.png)
 
 ## installation
 
