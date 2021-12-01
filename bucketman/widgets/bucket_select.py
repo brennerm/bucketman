@@ -1,6 +1,5 @@
 import inspect
 
-import boto3
 import botocore.exceptions
 import textual
 import textual.reactive
@@ -43,11 +42,10 @@ class S3BucketSelect(textual.widget.Widget):
             return None
 
     async def on_mount(self) -> None:
-        client = boto3.client('s3')
         try:
-            self.buckets = [bucket['Name'] for bucket in client.list_buckets()['Buckets']]
+            self.buckets = [bucket['Name'] for bucket in self.app.s3_client.list_buckets()['Buckets']]
         except botocore.exceptions.ClientError:
-            self.app.panic("Bucketman is unable to list your S3 buckets. Make sure your user has the required permissions or pass a bucket name using the --bucket option.")
+            self.app.panic("Bucketman is unable to list your S3 buckets. Please check your credentials and make sure your user has the required permissions or pass a bucket name using the --bucket option.")
 
     async def on_key(self, event: textual.events.Key) -> None:
         await self.dispatch_key(event)

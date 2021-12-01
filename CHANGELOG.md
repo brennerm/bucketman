@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - implement dynamic context aware key bindings
+- allow to set authentication params via CLI
 
 ### Fixed
 

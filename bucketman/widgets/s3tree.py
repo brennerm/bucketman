@@ -4,7 +4,6 @@ import enum
 import functools
 
 import botocore
-import boto3
 import textual.binding
 import textual.widgets
 import textual.reactive
@@ -144,8 +143,7 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
 
         prefix = node.data.key
 
-        client = boto3.client('s3')
-        paginator = client.get_paginator('list_objects_v2')
+        paginator = self.app.s3_client.get_paginator('list_objects_v2')
         result = paginator.paginate(Bucket=self.bucket_name, Delimiter='/', Prefix=prefix)
 
         try:
@@ -159,7 +157,7 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
                 key = obj.get('Key')
                 await node.add(key.replace(prefix, '', 1), S3Object(key, obj.get('Size'), ObjectType.FILE))
         except botocore.exceptions.ClientError:
-            self.app.panic(f'Failed to load contents of bucket "{self.bucket_name}". Make sure the bucket exists and you have permission to access it.')
+            self.app.panic(f'Failed to load contents of bucket "{self.bucket_name}". Please check your credentials and make sure the bucket exists and you have permission to access it.')
 
         node.loaded = True
         if node.data.is_dir:
