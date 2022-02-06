@@ -13,6 +13,7 @@ from bucketman.constants import AWS_HEX_COLOR_CODE
 from bucketman.events import StatusUpdate
 from bucketman.widgets.common import ObjectType
 
+
 @dataclasses.dataclass
 class FileObject:
     path: str
@@ -23,8 +24,9 @@ class FileObject:
     def is_dir(self):
         return self.type == ObjectType.FOLDER
 
+
 class LocalTree(textual.widgets.TreeControl[FileObject]):
-    name="LocalTree"
+    name = "LocalTree"
 
     def __init__(self, root_path: str, name: str = None):
         self.root_path = root_path
@@ -49,7 +51,7 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
     @selected_node.setter
     def selected_node(self, node: textual.widgets.TreeNode[FileObject]):
         self.cursor = node.id
-    
+
     @property
     def selected_object(self) -> FileObject:
         return self.selected_node.data
@@ -57,13 +59,15 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
     @property
     def bindings(self) -> list[textual.binding.Binding]:
         return [
-            textual.binding.Binding('R', "noop", "Reload", show=True),
+            textual.binding.Binding("R", "noop", "Reload", show=True),
         ]
 
     async def watch_hover_node(self, hover_node: textual.widgets.NodeID) -> None:
         for node in self.nodes.values():
             node.tree.guide_style = (
-                f"bold not dim {AWS_HEX_COLOR_CODE}" if node.id == hover_node else "black"
+                f"bold not dim {AWS_HEX_COLOR_CODE}"
+                if node.id == hover_node
+                else "black"
             )
         self.refresh(layout=True)
 
@@ -73,7 +77,9 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
     async def key_R(self) -> None:
         await self.load_objects(self.selected_node)
 
-    def render_node(self, node: textual.widgets.TreeNode[FileObject]) -> rich.console.RenderableType:
+    def render_node(
+        self, node: textual.widgets.TreeNode[FileObject]
+    ) -> rich.console.RenderableType:
         return self.render_tree_label(
             node,
             node.data.is_dir,
@@ -88,17 +94,19 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
         self,
         node: textual.widgets.TreeNode[FileObject],
         is_dir: bool,
-        expanded: bool=False,
-        is_cursor: bool=False,
-        is_hover: bool=False,
-        has_focus: bool=False,
+        expanded: bool = False,
+        is_cursor: bool = False,
+        is_hover: bool = False,
+        has_focus: bool = False,
     ) -> rich.console.RenderableType:
         meta = {
             "@click": f"click_label({node.id})",
             "tree_node": node.id,
             "cursor": node.is_cursor,
         }
-        label = rich.text.Text(node.label) if isinstance(node.label, str) else node.label
+        label = (
+            rich.text.Text(node.label) if isinstance(node.label, str) else node.label
+        )
         if is_hover:
             label.stylize("underline")
         if is_dir:
@@ -112,7 +120,9 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
         elif is_cursor:
             label.stylize("reverse dim")
 
-        icon_label = rich.text.Text(f"{icon} ", no_wrap=True, overflow="ellipsis") + label
+        icon_label = (
+            rich.text.Text(f"{icon} ", no_wrap=True, overflow="ellipsis") + label
+        )
         icon_label.apply_meta(meta)
         return icon_label
 
@@ -131,23 +141,29 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
         path = os.path.join(self.root_path, folder)
         for _, dirs, files in os.walk(path):
             for dir in sorted(dirs, key=str.casefold):
-                await node.add(dir, FileObject(os.path.join(path, dir), 0, ObjectType.FOLDER))
+                await node.add(
+                    dir, FileObject(os.path.join(path, dir), 0, ObjectType.FOLDER)
+                )
 
             for file in sorted(files, key=str.casefold):
-                await node.add(file, FileObject(os.path.join(path, file), 0, ObjectType.FILE))
+                await node.add(
+                    file, FileObject(os.path.join(path, file), 0, ObjectType.FILE)
+                )
 
             break
 
         node.loaded = True
         if node.data.is_dir:
             await node.expand()
-            await self.emit(StatusUpdate(self, message=f'Loaded files in {folder}'))
+            await self.emit(StatusUpdate(self, message=f"Loaded files in {folder}"))
         else:
-            await self.emit(StatusUpdate(self, message=f'Loaded file {folder}'))
+            await self.emit(StatusUpdate(self, message=f"Loaded file {folder}"))
 
         self.app.refresh(layout=True)
 
-    async def handle_tree_click(self, message: textual.widgets.TreeClick[FileObject]) -> None:
+    async def handle_tree_click(
+        self, message: textual.widgets.TreeClick[FileObject]
+    ) -> None:
         if message.node.data.is_dir:
             if not message.node.loaded:
                 await self.load_objects(message.node)

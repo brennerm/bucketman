@@ -6,7 +6,7 @@ import rich.align
 
 
 class StatusLog(Widget):
-    name = 'status'
+    name = "status"
 
     def __init__(self) -> None:
         super().__init__()
@@ -20,9 +20,9 @@ class StatusLog(Widget):
         self.refresh()
 
     def render(self) -> RenderableType:
-        visible_lines = self.lines[-(self.size.height - 2):]
+        visible_lines = self.lines[-(self.size.height - 2) :]
 
         return rich.panel.Panel(
-            rich.align.Align('\n'.join(visible_lines), vertical="bottom")
-            , title="Status"
-            )
+            rich.align.Align("\n".join(visible_lines), vertical="bottom"),
+            title="Status",
+        )

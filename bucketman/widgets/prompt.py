@@ -14,6 +14,7 @@ import rich.layout
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
 
+
 class Prompt(Widget):
     selected_style = f"bold black on {AWS_HEX_COLOR_CODE}"
     unselected_style = f"{AWS_HEX_COLOR_CODE} on black"
@@ -25,8 +26,8 @@ class Prompt(Widget):
         self.__callback_kwargs = None
         super().__init__(name=name)
 
-    yes = Button('Yes', style=unselected_style)
-    no = Button('No', style=selected_style)
+    yes = Button("Yes", style=unselected_style)
+    no = Button("No", style=selected_style)
     result = textual.reactive.Reactive(False)
 
     async def on_key(self, event: textual.events.Key) -> None:
@@ -64,8 +65,12 @@ class Prompt(Widget):
     def render(self) -> RenderableType:
         layout = rich.layout.Layout()
         layout.split_column(
-            rich.align.Align(rich.text.Text(self.text, style="bold"), align="center", vertical="middle"),
-            rich.layout.Layout(name="bottom")
+            rich.align.Align(
+                rich.text.Text(self.text, style="bold"),
+                align="center",
+                vertical="middle",
+            ),
+            rich.layout.Layout(name="bottom"),
         )
 
         layout["bottom"].split_row(

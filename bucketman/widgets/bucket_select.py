@@ -18,7 +18,7 @@ class S3BucketSelect(textual.widget.Widget):
     unselected_style = f"{AWS_HEX_COLOR_CODE} on black"
 
     def __init__(self, callback, callback_args=[], callback_kwargs={}) -> None:
-        super().__init__(name='S3 bucket select')
+        super().__init__(name="S3 bucket select")
 
         self.buckets = None
         self.selected_index = 0
@@ -43,9 +43,14 @@ class S3BucketSelect(textual.widget.Widget):
 
     async def on_mount(self) -> None:
         try:
-            self.buckets = [bucket['Name'] for bucket in self.app.s3_client.list_buckets()['Buckets']]
+            self.buckets = [
+                bucket["Name"]
+                for bucket in self.app.s3_client.list_buckets()["Buckets"]
+            ]
         except botocore.exceptions.ClientError:
-            self.app.panic("Bucketman is unable to list your S3 buckets. Please check your credentials and make sure your user has the required permissions or pass a bucket name using the --bucket option.")
+            self.app.panic(
+                "Bucketman is unable to list your S3 buckets. Please check your credentials and make sure your user has the required permissions or pass a bucket name using the --bucket option."
+            )
 
     async def on_key(self, event: textual.events.Key) -> None:
         await self.dispatch_key(event)
@@ -75,26 +80,45 @@ class S3BucketSelect(textual.widget.Widget):
 
         if self.buckets is None:
             layout.split_column(
-                rich.align.Align("Loading S3 buckets...", vertical='middle', align='center', height=3, style=S3BucketSelect.selected_style),
+                rich.align.Align(
+                    "Loading S3 buckets...",
+                    vertical="middle",
+                    align="center",
+                    height=3,
+                    style=S3BucketSelect.selected_style,
+                ),
             )
         elif self.buckets == []:
             layout.split_column(
-                rich.align.Align("No S3 buckets found.", vertical='middle', align='center', height=3, style=S3BucketSelect.selected_style)
+                rich.align.Align(
+                    "No S3 buckets found.",
+                    vertical="middle",
+                    align="center",
+                    height=3,
+                    style=S3BucketSelect.selected_style,
+                )
             )
         else:
-            header = rich.align.Align("Select S3 bucket", vertical='middle', align='center', height=3, style="bold")
+            header = rich.align.Align(
+                "Select S3 bucket",
+                vertical="middle",
+                align="center",
+                height=3,
+                style="bold",
+            )
             buttons = [
                 rich.align.Align(
                     bucket,
-                    vertical='middle',
-                    align='center',
+                    vertical="middle",
+                    align="center",
                     height=3,
-                    style=S3BucketSelect.selected_style if index == self.selected_index and self.has_focus else S3BucketSelect.unselected_style
-                ) for index, bucket in enumerate(self.buckets)
+                    style=S3BucketSelect.selected_style
+                    if index == self.selected_index and self.has_focus
+                    else S3BucketSelect.unselected_style,
+                )
+                for index, bucket in enumerate(self.buckets)
             ]
 
-            layout.split_column(
-                rich.console.Group(*([header] + buttons))
-            )
+            layout.split_column(rich.console.Group(*([header] + buttons)))
 
         return rich.padding.Padding(layout, (0, 1, 1, 0))
