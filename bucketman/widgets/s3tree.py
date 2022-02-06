@@ -145,9 +145,6 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         else:
             icon = "📄"
 
-        if label.plain.startswith("."):
-            label.stylize("dim")
-
         if is_cursor and has_focus:
             label.stylize("reverse")
         elif is_cursor:

@@ -107,9 +107,6 @@ class LocalTree(textual.widgets.TreeControl[FileObject]):
         else:
             icon = "📄"
 
-        if label.plain.startswith("."):
-            label.stylize("dim")
-
         if is_cursor and has_focus:
             label.stylize("reverse")
         elif is_cursor:
