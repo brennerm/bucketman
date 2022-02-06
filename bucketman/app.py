@@ -8,9 +8,10 @@ import textual.binding
 import textual.widgets
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
-from bucketman.events import MakeCopy, StatusUpdate
+from bucketman.events import StatusUpdate
 from bucketman.widgets import (Footer, LocalTree, Prompt, S3BucketSelect,
                                S3Tree, StatusLog, Header, VerticalDivider)
+from bucketman.widgets.common import ObjectType
 
 
 class BucketManApp(textual.app.App):

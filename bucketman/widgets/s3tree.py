@@ -12,10 +12,7 @@ import rich.text
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
 from bucketman.events import StatusUpdate
-
-class ObjectType(enum.Enum):
-    FILE = 0
-    FOLDER = 1
+from bucketman.widgets.common import ObjectType
 
 @dataclasses.dataclass
 class S3Object:
