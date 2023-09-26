@@ -4,11 +4,14 @@ import enum
 import functools
 
 import botocore.exceptions
+from rich.style import Style
+from rich.text import Text
 import textual.binding
 import textual.widgets
 import textual.reactive
 import rich.console
 import rich.text
+from textual.widgets._tree import TreeNode
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
 from bucketman.events import StatusUpdate
@@ -20,72 +23,50 @@ class S3Object:
     key: str
     size: float
     type: ObjectType
+    loaded: bool = False
 
     @property
     def is_dir(self):
         return self.type == ObjectType.FOLDER
 
 
-class S3Tree(textual.widgets.TreeControl[S3Object]):
+class S3Tree(textual.widgets.Tree[S3Object]):
     name = "S3Tree"
+    BINDINGS = [
+        textual.binding.Binding("r", "reload", "Reload", show=True),
+        textual.binding.Binding("d", "download", "Download", show=True),
+        textual.binding.Binding("d", "delete", "Delete", show=True),
+        textual.binding.Binding("b", "change_bucket", "Change Bucket", show=True),
+    ]
 
     def __init__(self, bucket_name: str, name: str = None):
         self.bucket_name = bucket_name
         label = bucket_name
         data = S3Object(key="", size=0, type=ObjectType.FOLDER)
         super().__init__(label, name=name, data=data)
-
-    has_focus: textual.reactive.Reactive[bool] = textual.reactive.Reactive(False)
-
-    async def on_focus(self) -> None:
-        self.has_focus = True
-
-    def on_blur(self) -> None:
-        self.has_focus = False
-
-    @property
-    def selected_node(self) -> textual.widgets.TreeNode[S3Object]:
-        for node in self.nodes.values():
-            if node.is_cursor:
-                return node
-
-    @selected_node.setter
-    def selected_node(self, node: textual.widgets.TreeNode[S3Object]):
-        self.cursor = node.id
+        self.root.expand()
 
     @property
     def selected_object(self) -> S3Object:
-        return self.selected_node.data
-
-    @property
-    def bindings(self) -> list[textual.binding.Binding]:
-        return [
-            textual.binding.Binding("R", "noop", "Reload", show=True),
-            textual.binding.Binding(
-                "b", "noop", "Change Bucket", show=True, key_display="b"
-            ),
-            textual.binding.Binding("d", "noop", "Delete", show=True, key_display="d"),
-        ]
-
-    async def watch_hover_node(self, hover_node: textual.widgets.NodeID) -> None:
-        for node in self.nodes.values():
-            node.tree.guide_style = (
-                f"bold not dim {AWS_HEX_COLOR_CODE}"
-                if node.id == hover_node
-                else "black"
-            )
-        self.refresh(layout=True)
+        return self.cursor_node.data
 
     async def on_mount(self) -> None:
-        await self.load_objects(self.root)
+        self.load_objects(self.root)
 
-    async def key_R(self) -> None:
-        await self.load_objects(self.selected_node)
+    def action_reload(self) -> None:
+        if self.cursor_node.data.is_dir:
+            node_to_reload = self.cursor_node
+        else:
+            node_to_reload = self.cursor_node.parent
+
+        node_to_reload.remove_children()
+        self.load_objects(node_to_reload)
+        node_to_reload.expand()
 
     async def key_b(self) -> None:
         await self.app.show_select_bucket()
 
-    async def key_d(self):
+    async def action_delete(self):
         if self.selected_object.key:
             if self.selected_object.type == ObjectType.FOLDER:
                 prompt = f"Do you want to delete all objects with the prefix {self.selected_object.key}?"
@@ -106,84 +87,47 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
         except botocore.exceptions.ClientError as e:
             await self.app.handle_status_update(
                 StatusUpdate(
-                    self,
                     message=f'Failed to delete S3 object(s) "{self.bucket_name}/{prefix_or_key}": {e.response["Error"]["Message"]}',
                 )
             )
 
         await self.app.handle_status_update(
             StatusUpdate(
-                self,
                 message=f'Deleted S3 object(s) "{self.bucket_name}/{prefix_or_key}"',
             )
         )
-        await self.load_objects(self.selected_node.parent)
+        self.load_objects(self.selected_node.parent)
 
-    def render_node(
-        self, node: textual.widgets.TreeNode[S3Object]
-    ) -> rich.console.RenderableType:
-        return self.render_tree_label(
-            node,
-            node == self.root,
-            node.data.is_dir,
-            node.expanded,
-            node.is_cursor,
-            node.id == self.hover_node,
-            self.has_focus,
-        )
+    def render_label(self, node: TreeNode[S3Object], base_style: Style, style: Style) -> Text:
+        node_label = node._label.copy()
+        node_label.stylize(style)
 
-    @functools.lru_cache(maxsize=1024 * 32)
-    def render_tree_label(
-        self,
-        node: textual.widgets.TreeNode[S3Object],
-        is_root: bool,
-        is_dir: bool,
-        expanded: bool = False,
-        is_cursor: bool = False,
-        is_hover: bool = False,
-        has_focus: bool = False,
-    ) -> rich.console.RenderableType:
-        meta = {
-            "@click": f"click_label({node.id})",
-            "tree_node": node.id,
-            "cursor": node.is_cursor,
-        }
-        label = (
-            rich.text.Text(node.label) if isinstance(node.label, str) else node.label
-        )
-        if is_hover:
-            label.stylize("underline")
-
-        if is_root:
-            label.stylize(f"bold {AWS_HEX_COLOR_CODE}")
-            icon = "🪣"
-        elif is_dir:
-            label.stylize("bold blue")
-            icon = "📂" if expanded else "📁"
+        if node.is_root:
+            prefix = ("🪣 ", base_style)
+        elif node.data.is_dir:
+            prefix = (
+                "▼ " if node.is_expanded else "▶ ",
+                base_style + rich.style.Style.from_meta({"toggle": True}),
+            )
         else:
-            icon = "📄"
+            prefix = ("", base_style)
 
-        if is_cursor and has_focus:
-            label.stylize("reverse")
-        elif is_cursor:
-            label.stylize("reverse dim")
 
-        icon_label = (
-            rich.text.Text(f"{icon} ", no_wrap=True, overflow="ellipsis") + label
-        )
-        icon_label.apply_meta(meta)
-        return icon_label
+        # TODO fix encoding
+        # elif node.data.is_dir:
+        #     prefix = (
+        #         "📂 " if node.is_expanded else "📁 ",
+        #         base_style + rich.style.Style.from_meta({"toggle": True}),
+        #     )
+        # else:
+        #     prefix = ("📄 ", base_style)
 
-    async def load_objects(self, node: textual.widgets.TreeNode[S3Object]):
+        text = Text.assemble(prefix, node_label)
+        return text
+
+    def load_objects(self, node: textual.widgets.TreeNode[S3Object]):
         if node is None:
             node = self.root
-
-        await node.expand(False)
-        self.app.refresh(layout=True)
-
-        node.loaded = False
-        node.children = []
-        node.tree.children = []
 
         prefix = node.data.key
 
@@ -197,7 +141,7 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
                 if not common_prefix:
                     continue
                 key = common_prefix.get("Prefix")
-                await node.add(
+                node.add(
                     key.replace(prefix, "", 1), S3Object(key, 0, ObjectType.FOLDER)
                 )
 
@@ -205,36 +149,39 @@ class S3Tree(textual.widgets.TreeControl[S3Object]):
                 if not obj:
                     continue
                 key = obj.get("Key")
-                await node.add(
+                node.add(
                     key.replace(prefix, "", 1),
                     S3Object(key, obj.get("Size"), ObjectType.FILE),
+                    allow_expand=False
                 )
         except botocore.exceptions.ClientError:
             self.app.panic(
                 f'Failed to load contents of bucket "{self.bucket_name}". Please check your credentials and make sure the bucket exists and you have permission to access it.'
             )
 
-        node.loaded = True
+        node.data.loaded = True
         if node.data.is_dir:
-            await node.expand()
-            await self.emit(
+            self.post_message(
                 StatusUpdate(
-                    self, message=f"Loaded objects in {self.bucket_name}/{prefix}"
+                    message=f"Loaded objects in {self.bucket_name}/{prefix}"
                 )
             )
         else:
-            await self.emit(
-                StatusUpdate(self, message=f"Loaded object {self.bucket_name}/{prefix}")
+            self.post_message(
+                StatusUpdate(message=f"Loaded object {self.bucket_name}/{prefix}")
             )
 
-        self.show_cursor = True
-        self.app.refresh(layout=True)
+    def load_and_toggle_selected_node(self):
+        node = self.cursor_node
+        if node.data.is_dir:
+            if not node.data.loaded:
+                self.load_objects(node)
 
-    async def handle_tree_click(
-        self, message: textual.widgets.TreeClick[S3Object]
-    ) -> None:
-        if message.node.data.is_dir:
-            if not message.node.loaded:
-                await self.load_objects(message.node)
-            else:
-                await message.node.toggle()
+        node.toggle()
+
+    def action_toggle_node(self):
+        self.load_and_toggle_selected_node()
+
+    def action_select_cursor(self):
+        self.load_and_toggle_selected_node()
+

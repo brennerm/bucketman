@@ -5,6 +5,8 @@ import boto3
 import botocore.exceptions
 import textual.app
 import textual.binding
+import textual.containers
+import textual.screen
 import textual.widgets
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
@@ -21,8 +23,14 @@ from bucketman.widgets import (
 )
 from bucketman.widgets.common import ObjectType
 
-
 class BucketManApp(textual.app.App):
+    TITLE = "BucketMan"
+    SUB_TITLE = "Terminal S3 File Manager"
+    CSS_PATH = "bucketman.tcss"
+    BINDINGS = [
+            textual.binding.Binding("escape,q,ctrl+c", "quit", "Quit", show=True, key_display="ESC"),
+        ]
+
     def __init__(
         self,
         *args,
@@ -46,17 +54,11 @@ class BucketManApp(textual.app.App):
         self.left_pane = None
         self.right_pane = None
         self.focused_pane = None
-        self.status_log = StatusLog()
-        self.footer = Footer()
-        self.header = Header(style=f"black on {AWS_HEX_COLOR_CODE}")
+        self.status_log = StatusLog(id="status_log")
+        self.footer = textual.widgets.Footer()
+        self.header = textual.widgets.Header()
 
-        self.default_bindings = [
-            textual.binding.Binding("ctrl+c", "quit", "", allow_forward=False),
-            textual.binding.Binding("escape", "quit", "Quit", show=True),
-            textual.binding.Binding(
-                "ctrl+i", "cycle", "Cycle", show=True, key_display="TAB"
-            ),
-        ]
+        
         super().__init__(*args, **kwargs)
 
     show_dialog = textual.reactive.Reactive(False)
@@ -73,22 +75,22 @@ class BucketManApp(textual.app.App):
     def focused_widget(self):
         return self.focused_pane.window.widget
 
-    async def load_bindings(self):
-        new_bindings = list(self.default_bindings)
+    # def load_bindings(self):
+    #     new_bindings = list(self.default_bindings)
 
-        try:
-            new_bindings += self.focused.bindings
-        except AttributeError:
-            pass
+    #     try:
+    #         new_bindings += self.focused.bindings
+    #     except AttributeError:
+    #         pass
 
-        self.bindings = textual.binding.Bindings()
-        for binding in new_bindings:
-            self.bindings.keys[binding.key] = binding
+    #     self.bindings = textual.binding.Bindings()
+    #     for binding in new_bindings:
+    #         self.bindings.keys[binding.key] = binding
 
-        self.footer.refresh(layout=True)
+    #     self.footer.refresh(layout=True)
 
-    async def on_load(self) -> None:
-        await self.load_bindings()
+    # def on_load(self) -> None:
+    #     self.load_bindings()
 
     async def action_cycle(self) -> None:
         if self.left_widget == self.focused:
@@ -237,8 +239,8 @@ class BucketManApp(textual.app.App):
                 )
             )
 
-    async def handle_status_update(self, message: StatusUpdate) -> None:
-        await self.status_log.add_status(message.message)
+    def on_status_update(self, message: StatusUpdate) -> None:
+        self.status_log.add_status(message.message)
 
     def watch_show_dialog(self, show_bar: bool) -> None:
         self.dialog.animate(
@@ -264,44 +266,27 @@ class BucketManApp(textual.app.App):
         await self.focused_widget.focus()
         await self.load_bindings()
 
-    async def on_mount(self) -> None:
-        self.dialog = Prompt("", name="prompt")
-        await self.view.dock(self.dialog, edge="bottom", size=20, z=1)
-        self.dialog.layout_offset_y = 20
+    def compose(self) -> textual.app.ComposeResult:
+        #self.dialog = Prompt("", name="prompt")
+        #self.view.dock(self.dialog, edge="bottom", size=20, z=1)
+        #self.dialog.layout_offset_y = 20
 
         directory = LocalTree(os.getcwd())
-        directory.show_cursor = True
-        self.left_pane = textual.widgets.ScrollView(directory, name="left_pane")
+        #self.left_pane = textual.widgets.ScrollView(directory, name="left_pane")
         if self.bucket_name:
             widget = S3Tree(self.bucket_name, name="s3")
         else:
             widget = S3BucketSelect(self.bucket_selected)
-        self.right_pane = textual.widgets.ScrollView(widget, name="right_pane")
 
-        await self.right_pane.window.widget.focus()
-        self.focused_pane = self.right_pane
+        #self.right_pane = textual.widgets.ScrollView(widget, name="right_pane")
+        #self.right_pane.window.widget.focus()
+        #self.focused_pane = self.right_pane
 
-        grid = await self.view.dock_grid(name="grid")
-
-        grid.add_column("left")
-        grid.add_column("middle", size=1)
-        grid.add_column("right")
-        grid.add_row("header", size=1)
-        grid.add_row("pane")
-        grid.add_row("status", size=6)
-        grid.add_row("footer", size=1)
-        grid.add_areas(
-            header="left-start|right-end,header",
-            left="left,pane",
-            middle="middle,pane",
-            right="right,pane",
-            status="left-start|right-end,status",
-            footer="left-start|right-end,footer",
+        yield self.header
+        yield textual.containers.Horizontal(
+            textual.containers.ScrollableContainer(directory, id="left"),
+            textual.containers.ScrollableContainer(widget, id="right"),
+            id="center"
         )
-
-        grid.place(header=self.header)
-        grid.place(left=self.left_pane)
-        grid.place(middle=VerticalDivider())
-        grid.place(right=self.right_pane)
-        grid.place(status=self.status_log)
-        grid.place(footer=self.footer)
+        yield self.status_log
+        yield self.footer

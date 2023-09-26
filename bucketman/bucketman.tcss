@@ -1,0 +1,26 @@
+#center {
+    height: 85%;
+    width: 100%;
+}
+
+#left {
+    height: 100%;
+    width: 50%;
+    border-right: vkey white;
+}
+
+#right {
+    height: 100%;
+    width: 50%;
+    border-left: vkey white;
+}
+
+#status_log {
+    height: 15%;
+}
+
+Header {
+  dock: top;
+  height: 1;
+  content-align: center middle;
+}

@@ -21,11 +21,11 @@ class Header(textual.widget.Widget):
     def __rich_repr__(self) -> rich.repr.Result:
         yield self.title
 
-    async def on_mount(self) -> None:
-        async def set_title(title: str) -> None:
-            self.title = title
+    # async def on_mount(self) -> None:
+    #     async def set_title(title: str) -> None:
+    #         self.title = title
 
-        textual.reactive.watch(self.app, "title", set_title)
+    #     textual.reactive.watch(self.app, "title", set_title)
 
     def render(self) -> rich.console.RenderableType:
         header_table = rich.table.Table.grid(padding=(0, 1), expand=True)

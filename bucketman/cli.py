@@ -58,14 +58,12 @@ class RequiredIf(click.Option):
 @click.option("--bucket", help="Set the S3 bucket to open.")
 @click.option("--debug", is_flag=True, help="Enable debug logs.")
 def main(endpoint_url, access_key_id, secret_access_key, bucket, debug):
-    BucketManApp.run(
-        title="bucketman",
-        log="bucketman.log" if debug else None,
+    BucketManApp(
         bucket=bucket,
         endpoint_url=endpoint_url,
         access_key_id=access_key_id,
         secret_access_key=secret_access_key,
-    )
+    ).run()
 
 
 if __name__ == "__main__":
