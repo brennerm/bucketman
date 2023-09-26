@@ -8,14 +8,14 @@ import rich.align
 class StatusLog(Widget):
     name = "status"
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self.lines = []
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "name", self.name
 
-    async def add_status(self, message: str) -> None:
+    def add_status(self, message: str) -> None:
         self.lines.append(message)
         self.refresh()
 

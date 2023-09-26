@@ -26,8 +26,8 @@ class Prompt(Widget):
         self.__callback_kwargs = None
         super().__init__(name=name)
 
-    yes = Button("Yes", style=unselected_style)
-    no = Button("No", style=selected_style)
+    yes = Button("Yes")
+    no = Button("No")
     result = textual.reactive.Reactive(False)
 
     async def on_key(self, event: textual.events.Key) -> None:

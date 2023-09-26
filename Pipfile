@@ -4,9 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-click = "*"
-boto3 = "*"
-textual = "*"
+click = "8.1.7"
+boto3 = "1.28.54"
+textual = "0.38.1"
 
 [dev-packages]
 black = "*"
