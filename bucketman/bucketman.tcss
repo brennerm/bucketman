@@ -6,13 +6,12 @@
 #left {
     height: 100%;
     width: 50%;
-    border-right: vkey white;
 }
 
 #right {
     height: 100%;
     width: 50%;
-    border-left: vkey white;
+    border-left: outer white 100%;
 }
 
 #status_log {
@@ -20,9 +19,9 @@
 }
 
 Header {
-  dock: top;
-  height: 1;
-  content-align: center middle;
+    dock: top;
+    height: 1;
+    content-align: center middle;
 }
 
 Footer {

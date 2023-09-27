@@ -54,8 +54,8 @@ class ConfirmationScreen(textual.screen.ModalScreen[bool]):
     def compose(self) -> textual.app.ComposeResult:
         yield textual.containers.Grid(
             textual.widgets.Label(self.prompt, id="prompt"),
-            textual.widgets.Button("Yes", variant="success", id="yes"),
             textual.widgets.Button("No", variant="error", id="no"),
+            textual.widgets.Button("Yes", variant="success", id="yes"),
             id="dialog",
         )
 

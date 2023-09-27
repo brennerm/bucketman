@@ -1,10 +1,12 @@
 import os
+import pathlib
 import shutil
 
 import boto3
 import botocore.exceptions
 import textual.app
 import textual.binding
+import textual.notifications
 import textual.containers
 import textual.screen
 import textual.widgets
@@ -26,11 +28,12 @@ from bucketman.widgets.common import ObjectType
 
 class BucketManApp(textual.app.App):
     TITLE = "BucketMan"
-    SUB_TITLE = "Terminal S3 File Manager"
+    SUB_TITLE = "A Terminal S3 File Browser, 🔨 with 💗 by brennerm"
     CSS_PATH = "bucketman.tcss"
     BINDINGS = [
             textual.binding.Binding("escape,q,ctrl+c", "quit", "Quit", show=True, key_display="ESC", priority=True),
         ]
+    ENABLE_COMMAND_PALETTE = False
 
     def __init__(
         self,
@@ -39,10 +42,12 @@ class BucketManApp(textual.app.App):
         endpoint_url: str = None,
         access_key_id: str = None,
         secret_access_key: str = None,
+        dry_run: bool = False,
         **kwargs,
     ):
 
         self.bucket_name = bucket
+        self.dry_run = dry_run
 
         session = boto3.Session(
             aws_access_key_id=access_key_id,
@@ -59,179 +64,99 @@ class BucketManApp(textual.app.App):
         super().__init__(*args, **kwargs)
 
     @property
-    def selected_local_folder(self):
+    def selected_local_folder(self) -> pathlib.PosixPath:
         """Return the selected local folder. If a file is selected, return the parent folder."""
 
-        selected_node = self.query_one('#left').children[0].cursor_node
+        selected_node = self.query_one('#left LocalTree', LocalTree).cursor_node
         if selected_node.allow_expand:
             return selected_node.data.path
         else:
             return selected_node.parent.data.path
 
     @property
-    def selected_local_object(self):
+    def selected_local_object(self) -> pathlib.PosixPath:
         """Return the selected local folder or file."""
-
-        selected_node = self.query_one('#left').children[0].cursor_node
+        selected_node = self.query_one('#left LocalTree', LocalTree).cursor_node
         return selected_node.data.path
 
     @property
-    def selected_key_or_prefix(self):
+    def selected_s3_key_or_prefix(self):
         """Return the selected S3 key or prefix."""
-        selected_node = self.query_one('#right').children[0].cursor_node
+        selected_node = self.query_one('#right S3Tree', S3Tree).cursor_node
         return selected_node.data.key
 
-    async def action_delete(self) -> None:
-        if self.left_widget == self.focused:
-            path = self.left_widget.selected_object.path
-            await self.dialog.do_prompt(
-                f"Do you want to delete the path {path}?",
-                self.do_local_delete,
-                path=path,
-            )
+    @property
+    def selected_s3_prefix(self):
+        """Return the selected S3 prefix. If an object is selected, return the parent prefix."""
+        selected_node = self.query_one('#right S3Tree', S3Tree).cursor_node
+        if selected_node.allow_expand:
+            return selected_node.data.key
+        else:
+            return selected_node.parent.data.key
 
     def action_download(self) -> None:
         """Download the selected object to the selected local folder after confirmation."""
+        bucket = self.bucket_name
+        key = self.selected_s3_key_or_prefix
+        path = str(self.selected_local_folder.joinpath(os.path.basename(key)))
+
         def check_download(do_download: bool) -> None:
             if not do_download:
                 return
-            self.notify(f'Would download {self.selected_key_or_prefix} to {self.selected_local_folder}')
+
+            if self.dry_run:
+                self.notify(f'Would download {bucket}/{key} to {path}', title='Dry Run')
+                return
+
+            self.run_worker(self.do_download(self.bucket_name, key, path), thread=True)
 
         self.push_screen(
             ConfirmationScreen(
-                prompt=f"Do you want to download the object {self.selected_key_or_prefix} to {self.selected_local_folder}?",
+                prompt=f"Do you want to download the object {bucket}/{key} to {path}?",
             ),
             check_download
         )
 
+    async def do_download(self, bucket, key, path) -> None:
+        try:
+            self.s3_client.download_file(bucket, key, path)
+        except botocore.exceptions.ClientError as e:
+            self.notify(
+                f'Failed to download object {bucket}/{key} to {path}: {e.response["Error"]["Message"]}',
+                title='Error',
+                severity='error'
+            )
+        else:
+            self.query_one('#left LocalTree', LocalTree).reload_selected_directory()
+
+            self.notify(
+                f'Successfully downloaded object {bucket}/{key} to {path}',
+                title='Success',
+            )
+
     def action_upload(self) -> None:
-        """Upload the selected local file to the selected S3 prefix after confirmation."""
+        """Upload the selected local folder/file to the selected S3 prefix after confirmation."""
+
+        bucket = self.bucket_name
+        path = str(self.selected_local_object)
+        key = os.path.join(self.selected_s3_prefix, os.path.basename(path))
+
         def check_upload(do_upload: bool) -> None:
             if not do_upload:
                 return
-            self.notify(f'Would upload {self.selected_local_object} to {self.selected_key_or_prefix}')
+
+            if self.dry_run:
+                self.notify(f'Would upload {path} to {key}', title='Dry Run')
+                return
+
+            self.run_worker(self.do_upload(path, bucket, key), thread=True)
 
         self.push_screen(
             ConfirmationScreen(
-                prompt=f"Do you want to upload the file {self.selected_local_object} to {self.bucket_name}/{self.selected_key_or_prefix}?",
+                prompt=f"Do you want to upload the path {path} to {bucket}/{key}?",
             ),
             check_upload
         )
-
-    def action_delete_local(self) -> None:
-        """Delete the selected local file or folder after confirmation."""
-        def check_delete(do_delete: bool) -> None:
-            if not do_delete:
-                return
-            self.notify(f'Would delete {self.selected_local_object}')
-
-        self.push_screen(
-            ConfirmationScreen(
-                prompt=f"Do you want to delete the path {self.selected_local_object}?",
-            ),
-            check_delete
-        )
-
-    def action_delete_s3(self) -> None:
-        """Delete the selected S3 object or prefix after confirmation."""
-        def check_delete(do_delete: bool) -> None:
-            if not do_delete:
-                return
-            self.notify(f'Would delete {self.selected_key_or_prefix}')
-
-        self.push_screen(
-            ConfirmationScreen(
-                prompt=f"Do you want to delete the object {self.selected_key_or_prefix}?",
-            ),
-            check_delete
-        )
-
-    def action_select_bucket(self) -> None:
-        """Show the bucket select screen and change the bucket if a bucket is selected"""
-        def select_bucket(new_bucket: str):
-            right_pane = self.query_one('#right')
-            right_pane.remove_children()
-            right_pane.mount(S3Tree(new_bucket))
-            right_pane.children[0].focus()
-            self.notify(f'You are now connected to bucket [b]{new_bucket}[/b]', title='Changed Bucket')
-
-        self.push_screen(
-            BucketSelectScreen(),
-            select_bucket
-        )
-
-    async def do_local_delete(self, path) -> None:
-        try:
-            if os.path.isfile(path):
-                os.remove(path)
-            else:
-                shutil.rmtree(path)
-        except OSError as e:
-            await self.handle_status_update(
-                StatusUpdate(
-                    self, message=f'Failed to delete path "{path}": {e.strerror}'
-                )
-            )
-        else:
-            await self.handle_status_update(
-                StatusUpdate(self, message=f'Successfully deleted path "{path}"')
-            )
-            await self.left_widget.load_objects(self.left_widget.selected_node.parent)
-
-    async def action_copy(self) -> None:
-        if self.left_widget == self.focused:
-            message = MakeCopy(
-                self,
-                src_bucket=None,
-                src_path=self.left_widget.selected_object.path,
-                dst_bucket=self.right_widget.bucket_name,
-                dst_path=os.path.dirname(self.right_widget.selected_object.key),
-                recursive=True,
-            )
-        else:
-            message = MakeCopy(
-                self,
-                src_bucket=self.right_widget.bucket_name,
-                src_path=self.right_widget.selected_object.key,
-                dst_bucket=None,
-                dst_path=self.left_widget.data.path,
-                recursive=True,
-            )
-
-        # local copy
-        if message.src_bucket is None and message.dst_bucket is None:
-            await self.handle_status_update(
-                StatusUpdate(
-                    self, message="Copying from local to local is not yet supported!"
-                )
-            )
-        # upload
-        elif message.src_bucket is None and message.dst_bucket is not None:
-            key = os.path.join(message.dst_path, os.path.basename(message.src_path))
-            await self.dialog.do_prompt(
-                f"Do you want to upload the file {message.src_path} to {self.right_widget.bucket_name}/{key}?",
-                self.do_upload,
-                path=message.src_path,
-                bucket=self.right_widget.bucket_name,
-                key=key,
-            )
-        # download
-        elif message.src_bucket is not None and message.dst_bucket is None:
-            path = os.path.join(message.dst_path, os.path.basename(message.src_path))
-            await self.dialog.do_prompt(
-                f"Do you want to download the object {self.right_widget.bucket_name}/{self.right_widget.selected_object.key} to {path}?",
-                self.do_download,
-                bucket=self.right_widget.bucket_name,
-                key=self.right_widget.selected_object.key,
-                path=path,
-            )
-        # copy from one bucket to another
-        else:
-            await self.handle_status_update(
-                StatusUpdate(
-                    self, message="Copying from S3 to S3 is not yet supported!"
-                )
-            )
 
     async def do_upload(self, path, bucket, key) -> None:
         try:
@@ -243,55 +168,119 @@ class BucketManApp(textual.app.App):
                             os.path.join(key, os.path.relpath(root, path), file)
                         )
                         self.s3_client.upload_file(src, bucket, dst)
-                        await self.handle_status_update(
-                            StatusUpdate(
-                                self, message=f"Uploaded file {src} to {bucket}/{dst}"
-                            )
-                        )
             else:
                 self.s3_client.upload_file(path, bucket, key)
         except botocore.exceptions.ClientError as e:
-            await self.handle_status_update(
-                StatusUpdate(
-                    self,
-                    message=f'Failed to upload file {path} to {bucket}/{key}: {e.response["Error"]["Message"]}',
-                )
+            self.notify(
+                f'Failed to upload file {path} to {bucket}/{key}: {e.response["Error"]["Message"]}',
+                title='Error',
+                severity='error'
             )
         else:
-            node_to_reload = (
-                self.right_widget.selected_node.parent
-                if self.right_widget.selected_node.parent
-                else self.right_widget.selected_node
+            self.query_one('#right S3Tree', S3Tree).reload_selected_prefix()
+            self.notify(
+                f'Successfully uploaded path {path} to {bucket}/{key}',
+                title='Success',
             )
-            await self.right_widget.load_objects(node_to_reload)
 
-    async def do_download(self, bucket, key, path) -> None:
+    def action_local_delete(self) -> None:
+        """Delete the selected local file or folder after confirmation."""
+        path = str(self.selected_local_object.absolute())
+
+        def check_delete(do_delete: bool) -> None:
+            if not do_delete:
+                return
+
+            if self.dry_run:
+                self.notify(f'Would delete {path}', title='Dry Run')
+                return
+
+            self.run_worker(self.do_local_delete(path), thread=True)
+
+        self.push_screen(
+            ConfirmationScreen(
+                prompt=f"Do you want to delete the path {path}?",
+            ),
+            check_delete
+        )
+
+    async def do_local_delete(self, path: str) -> None:
+        """Delete the given local file or folder."""
         try:
-            self.s3_client.download_file(bucket, key, path)
-        except botocore.exceptions.ClientError as e:
-            await self.handle_status_update(
-                StatusUpdate(
-                    self,
-                    message=f'Failed to download object {bucket}/{key} to {path}: {e.response["Error"]["Message"]}',
-                )
+            if os.path.isfile(path):
+                os.remove(path)
+            else:
+                shutil.rmtree(path)
+        except OSError as e:
+            self.notify(
+                f'Failed to delete path "{path}": {e.strerror}',
+                title='Error',
+                severity='error'
             )
         else:
-            node_to_reload = (
-                self.left_widget.selected_node.parent
-                if self.left_widget.selected_node.parent
-                else self.left_widget.selected_node
+            self.notify(
+                f'Successfully deleted path "{path}"',
+                title='Success',
             )
-            await self.left_widget.load_objects(node_to_reload)
-            await self.handle_status_update(
-                StatusUpdate(
-                    self, message=f"Downloaded object {bucket}/{key} to {path}"
-                )
-            )
+            self.query_one('#left LocalTree', LocalTree).reload_parent_of_selected_node()
 
-    #def on_status_update(self, message: StatusUpdate) -> None:
-    #    self.status_log.add_status(message.message)
+    def action_s3_delete(self) -> None:
+        """Delete the selected S3 object or prefix after confirmation."""
+        bucket = self.bucket_name
+        key_or_prefix = self.selected_s3_key_or_prefix
+
+        def check_delete(do_delete: bool) -> None:
+            if not do_delete:
+                return
+
+            if self.dry_run:
+                self.notify(f'Would delete {bucket}/{key_or_prefix}', title='Dry Run')
+                return
+
+            self.run_worker(self.do_s3_delete(bucket, key_or_prefix), thread=True)
+
+        self.push_screen(
+            ConfirmationScreen(
+                prompt=f"Do you want to delete the object {bucket}/{key_or_prefix}?",
+            ),
+            check_delete
+        )
+
+    async def do_s3_delete(self, bucket: str, key_or_prefix: str) -> None:
+        """Delete the given S3 object or prefix."""
+
+        try:
+            self.s3_resource.Bucket(bucket).objects.filter(Prefix=key_or_prefix).delete()
+        except botocore.exceptions.ClientError as e:
+            self.notify(
+                f'Failed to delete S3 object(s) "{bucket}/{key_or_prefix}": {e.response["Error"]["Message"]}',
+                title='Error',
+                severity='error'
+            )
+        else:
+            self.notify(
+                f'Successfully deleted S3 object(s) "{bucket}/{key_or_prefix}"',
+                title='Success',
+            )
+            self.query_one('#right S3Tree', S3Tree).reload_selected_prefix()
+
+    def action_select_bucket(self) -> None:
+        """Show the bucket select screen and change the bucket if a bucket is selected"""
+        def select_bucket(new_bucket: str):
+            self.bucket_name = new_bucket
+            right_pane = self.query_one('#right', textual.containers.ScrollableContainer)
+            right_pane.remove_children()
+            right_pane.mount(S3Tree(new_bucket))
+            right_pane.children[0].focus()
+            self.notify(f'You are now connected to bucket [b]{new_bucket}[/b]', title='Changed Bucket')
+
+        self.push_screen(
+            BucketSelectScreen(),
+            select_bucket
+        )
 
     def on_mount(self) -> None:
+        # open bucket select screen if no bucket has been provided
         if not self.bucket_name:
             self.action_select_bucket()
 
@@ -314,5 +303,4 @@ class BucketManApp(textual.app.App):
             textual.containers.ScrollableContainer(widget, id="right"),
             id="center"
         )
-        #yield self.status_log
         yield self.footer
