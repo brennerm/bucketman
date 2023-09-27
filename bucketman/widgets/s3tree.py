@@ -35,7 +35,7 @@ class S3Tree(textual.widgets.Tree[S3Object]):
     BINDINGS = [
         textual.binding.Binding("r", "reload", "Reload", show=True),
         textual.binding.Binding("d", "download", "Download", show=True, key_display='d'),
-        textual.binding.Binding("D", "delete_s3", "Delete", show=True, key_display="Shift+d"),
+        textual.binding.Binding("D", "s3_delete", "Delete", show=True, key_display="Shift+d"),
         textual.binding.Binding("b", "select_bucket", "Select Bucket", show=True),
     ]
 
@@ -53,16 +53,27 @@ class S3Tree(textual.widgets.Tree[S3Object]):
     async def on_mount(self) -> None:
         self.load_objects(self.root)
 
-    def action_reload(self) -> None:
+    def reload_node(self, node: TreeNode[S3Object]):
+        """Reload the given node. If the node is a file or a prefix with no children, reload the parent."""
+        node.remove_children()
+        self.load_objects(node)
+        if not node.children and self.root != node:
+            self.reload_node(node.parent)
+        else:
+            node.expand()
+
+    def reload_selected_prefix(self) -> str:
         if self.cursor_node.data.is_dir:
             node_to_reload = self.cursor_node
         else:
             node_to_reload = self.cursor_node.parent
 
-        node_to_reload.remove_children()
-        self.load_objects(node_to_reload)
-        node_to_reload.expand()
-        self.notify(f'Reloaded objects in {self.bucket_name}/{node_to_reload.data.key}')
+        self.reload_node(node_to_reload)
+        return node_to_reload.data.key
+
+    def action_reload(self) -> None:
+        reloaded_key = self.reload_selected_prefix()
+        self.notify(f'Reloaded objects in {self.bucket_name}/{reloaded_key}')
 
     async def action_delete(self):
         if self.selected_object.key:
@@ -142,6 +153,7 @@ class S3Tree(textual.widgets.Tree[S3Object]):
                     S3Object(key, obj.get("Size"), ObjectType.FILE),
                     allow_expand=False
                 )
+
         except botocore.exceptions.ClientError:
             self.notify(
                 f'Failed to load contents of bucket "{self.bucket_name}". Please check your credentials and make sure the bucket exists and you have permission to access it.',
