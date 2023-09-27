@@ -1,5 +1,5 @@
 #center {
-    height: 85%;
+    height: 100%;
     width: 100%;
 }
 
@@ -23,4 +23,17 @@ Header {
   dock: top;
   height: 1;
   content-align: center middle;
+}
+
+Footer {
+    dock: bottom;
+    height: 1;
+}
+
+#no_bucket {
+    width: auto;
+}
+
+ToastRack {
+    padding-bottom: 1;
 }
