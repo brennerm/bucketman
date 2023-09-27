@@ -32,6 +32,7 @@ class LocalTree(textual.widgets.DirectoryTree):
     BINDINGS = [
         textual.binding.Binding("r", "reload", "Reload", show=True),
         textual.binding.Binding("u", "upload", "Upload", show=True),
+        textual.binding.Binding("D", "delete_local", "Delete", show=True, key_display="Shift+d"),
     ]
 
     @property

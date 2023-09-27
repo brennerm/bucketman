@@ -11,6 +11,7 @@ import textual.widgets
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
 from bucketman.events import StatusUpdate
+from bucketman.modals import BucketSelectScreen, ConfirmationScreen
 from bucketman.widgets import (
     Footer,
     LocalTree,
@@ -28,7 +29,7 @@ class BucketManApp(textual.app.App):
     SUB_TITLE = "Terminal S3 File Manager"
     CSS_PATH = "bucketman.tcss"
     BINDINGS = [
-            textual.binding.Binding("escape,q,ctrl+c", "quit", "Quit", show=True, key_display="ESC"),
+            textual.binding.Binding("escape,q,ctrl+c", "quit", "Quit", show=True, key_display="ESC", priority=True),
         ]
 
     def __init__(
@@ -51,56 +52,34 @@ class BucketManApp(textual.app.App):
         self.s3_client = session.client("s3", endpoint_url=endpoint_url)
         self.s3_resource = session.resource("s3", endpoint_url=endpoint_url)
 
-        self.left_pane = None
-        self.right_pane = None
-        self.focused_pane = None
         self.status_log = StatusLog(id="status_log")
         self.footer = textual.widgets.Footer()
         self.header = textual.widgets.Header()
 
-        
         super().__init__(*args, **kwargs)
 
-    show_dialog = textual.reactive.Reactive(False)
+    @property
+    def selected_local_folder(self):
+        """Return the selected local folder. If a file is selected, return the parent folder."""
+
+        selected_node = self.query_one('#left').children[0].cursor_node
+        if selected_node.allow_expand:
+            return selected_node.data.path
+        else:
+            return selected_node.parent.data.path
 
     @property
-    def left_widget(self):
-        return self.left_pane.window.widget
+    def selected_local_object(self):
+        """Return the selected local folder or file."""
+
+        selected_node = self.query_one('#left').children[0].cursor_node
+        return selected_node.data.path
 
     @property
-    def right_widget(self):
-        return self.right_pane.window.widget
-
-    @property
-    def focused_widget(self):
-        return self.focused_pane.window.widget
-
-    # def load_bindings(self):
-    #     new_bindings = list(self.default_bindings)
-
-    #     try:
-    #         new_bindings += self.focused.bindings
-    #     except AttributeError:
-    #         pass
-
-    #     self.bindings = textual.binding.Bindings()
-    #     for binding in new_bindings:
-    #         self.bindings.keys[binding.key] = binding
-
-    #     self.footer.refresh(layout=True)
-
-    # def on_load(self) -> None:
-    #     self.load_bindings()
-
-    async def action_cycle(self) -> None:
-        if self.left_widget == self.focused:
-            await self.right_widget.focus()
-            await self.load_bindings()
-            self.focused_pane = self.right_pane
-        elif self.right_widget == self.focused:
-            await self.left_widget.focus()
-            await self.load_bindings()
-            self.focused_pane = self.left_pane
+    def selected_key_or_prefix(self):
+        """Return the selected S3 key or prefix."""
+        selected_node = self.query_one('#right').children[0].cursor_node
+        return selected_node.data.key
 
     async def action_delete(self) -> None:
         if self.left_widget == self.focused:
@@ -110,6 +89,76 @@ class BucketManApp(textual.app.App):
                 self.do_local_delete,
                 path=path,
             )
+
+    def action_download(self) -> None:
+        """Download the selected object to the selected local folder after confirmation."""
+        def check_download(do_download: bool) -> None:
+            if not do_download:
+                return
+            self.notify(f'Would download {self.selected_key_or_prefix} to {self.selected_local_folder}')
+
+        self.push_screen(
+            ConfirmationScreen(
+                prompt=f"Do you want to download the object {self.selected_key_or_prefix} to {self.selected_local_folder}?",
+            ),
+            check_download
+        )
+
+    def action_upload(self) -> None:
+        """Upload the selected local file to the selected S3 prefix after confirmation."""
+        def check_upload(do_upload: bool) -> None:
+            if not do_upload:
+                return
+            self.notify(f'Would upload {self.selected_local_object} to {self.selected_key_or_prefix}')
+
+        self.push_screen(
+            ConfirmationScreen(
+                prompt=f"Do you want to upload the file {self.selected_local_object} to {self.bucket_name}/{self.selected_key_or_prefix}?",
+            ),
+            check_upload
+        )
+
+    def action_delete_local(self) -> None:
+        """Delete the selected local file or folder after confirmation."""
+        def check_delete(do_delete: bool) -> None:
+            if not do_delete:
+                return
+            self.notify(f'Would delete {self.selected_local_object}')
+
+        self.push_screen(
+            ConfirmationScreen(
+                prompt=f"Do you want to delete the path {self.selected_local_object}?",
+            ),
+            check_delete
+        )
+
+    def action_delete_s3(self) -> None:
+        """Delete the selected S3 object or prefix after confirmation."""
+        def check_delete(do_delete: bool) -> None:
+            if not do_delete:
+                return
+            self.notify(f'Would delete {self.selected_key_or_prefix}')
+
+        self.push_screen(
+            ConfirmationScreen(
+                prompt=f"Do you want to delete the object {self.selected_key_or_prefix}?",
+            ),
+            check_delete
+        )
+
+    def action_select_bucket(self) -> None:
+        """Show the bucket select screen and change the bucket if a bucket is selected"""
+        def select_bucket(new_bucket: str):
+            right_pane = self.query_one('#right')
+            right_pane.remove_children()
+            right_pane.mount(S3Tree(new_bucket))
+            right_pane.children[0].focus()
+            self.notify(f'You are now connected to bucket [b]{new_bucket}[/b]', title='Changed Bucket')
+
+        self.push_screen(
+            BucketSelectScreen(),
+            select_bucket
+        )
 
     async def do_local_delete(self, path) -> None:
         try:
@@ -239,48 +288,25 @@ class BucketManApp(textual.app.App):
                 )
             )
 
-    def on_status_update(self, message: StatusUpdate) -> None:
-        self.status_log.add_status(message.message)
+    #def on_status_update(self, message: StatusUpdate) -> None:
+    #    self.status_log.add_status(message.message)
 
-    def watch_show_dialog(self, show_bar: bool) -> None:
-        self.dialog.animate(
-            "layout_offset_y", -(self.view.size.height / 2) + 10 if show_bar else 20
-        )
+    def on_mount(self) -> None:
+        if not self.bucket_name:
+            self.action_select_bucket()
 
-    async def toggle_dialog(self) -> None:
-        self.show_dialog = not self.show_dialog
-        if self.show_dialog:
-            await self.dialog.focus()
-        else:
-            await self.focused_widget.focus()
-
-    async def show_select_bucket(self) -> None:
-        await self.focused_pane.update(S3BucketSelect(self.bucket_selected))
-        await self.focused_widget.focus()
-        await self.load_bindings()
-
-    async def bucket_selected(self):
-        bucket_name = self.focused_widget.selected_bucket
-        s3tree = S3Tree(bucket_name, name="s3")
-        await self.focused_pane.update(s3tree)
-        await self.focused_widget.focus()
-        await self.load_bindings()
 
     def compose(self) -> textual.app.ComposeResult:
-        #self.dialog = Prompt("", name="prompt")
-        #self.view.dock(self.dialog, edge="bottom", size=20, z=1)
-        #self.dialog.layout_offset_y = 20
-
         directory = LocalTree(os.getcwd())
-        #self.left_pane = textual.widgets.ScrollView(directory, name="left_pane")
-        if self.bucket_name:
-            widget = S3Tree(self.bucket_name, name="s3")
-        else:
-            widget = S3BucketSelect(self.bucket_selected)
 
-        #self.right_pane = textual.widgets.ScrollView(widget, name="right_pane")
-        #self.right_pane.window.widget.focus()
-        #self.focused_pane = self.right_pane
+        if self.bucket_name:
+            widget = S3Tree(self.bucket_name)
+        else:
+            widget = textual.containers.Center(
+                textual.containers.Middle(
+                    textual.widgets.Static("No bucket selected", id="no_bucket")
+                )
+            )
 
         yield self.header
         yield textual.containers.Horizontal(
@@ -288,5 +314,5 @@ class BucketManApp(textual.app.App):
             textual.containers.ScrollableContainer(widget, id="right"),
             id="center"
         )
-        yield self.status_log
+        #yield self.status_log
         yield self.footer

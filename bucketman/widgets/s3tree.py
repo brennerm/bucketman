@@ -34,16 +34,16 @@ class S3Tree(textual.widgets.Tree[S3Object]):
     name = "S3Tree"
     BINDINGS = [
         textual.binding.Binding("r", "reload", "Reload", show=True),
-        textual.binding.Binding("d", "download", "Download", show=True),
-        textual.binding.Binding("d", "delete", "Delete", show=True),
-        textual.binding.Binding("b", "change_bucket", "Change Bucket", show=True),
+        textual.binding.Binding("d", "download", "Download", show=True, key_display='d'),
+        textual.binding.Binding("D", "delete_s3", "Delete", show=True, key_display="Shift+d"),
+        textual.binding.Binding("b", "select_bucket", "Select Bucket", show=True),
     ]
 
-    def __init__(self, bucket_name: str, name: str = None):
+    def __init__(self, bucket_name: str, *args, **kwargs):
         self.bucket_name = bucket_name
         label = bucket_name
         data = S3Object(key="", size=0, type=ObjectType.FOLDER)
-        super().__init__(label, name=name, data=data)
+        super().__init__(label, *args, data=data, **kwargs)
         self.root.expand()
 
     @property
@@ -62,9 +62,7 @@ class S3Tree(textual.widgets.Tree[S3Object]):
         node_to_reload.remove_children()
         self.load_objects(node_to_reload)
         node_to_reload.expand()
-
-    async def key_b(self) -> None:
-        await self.app.show_select_bucket()
+        self.notify(f'Reloaded objects in {self.bucket_name}/{node_to_reload.data.key}')
 
     async def action_delete(self):
         if self.selected_object.key:
@@ -103,24 +101,14 @@ class S3Tree(textual.widgets.Tree[S3Object]):
         node_label.stylize(style)
 
         if node.is_root:
-            prefix = ("🪣 ", base_style)
+            prefix = ("🪣  ", base_style)
         elif node.data.is_dir:
             prefix = (
-                "▼ " if node.is_expanded else "▶ ",
+                "📂 " if node.is_expanded else "📁 ",
                 base_style + rich.style.Style.from_meta({"toggle": True}),
             )
         else:
-            prefix = ("", base_style)
-
-
-        # TODO fix encoding
-        # elif node.data.is_dir:
-        #     prefix = (
-        #         "📂 " if node.is_expanded else "📁 ",
-        #         base_style + rich.style.Style.from_meta({"toggle": True}),
-        #     )
-        # else:
-        #     prefix = ("📄 ", base_style)
+            prefix = ("📄 ", base_style)
 
         text = Text.assemble(prefix, node_label)
         return text
@@ -155,9 +143,15 @@ class S3Tree(textual.widgets.Tree[S3Object]):
                     allow_expand=False
                 )
         except botocore.exceptions.ClientError:
-            self.app.panic(
-                f'Failed to load contents of bucket "{self.bucket_name}". Please check your credentials and make sure the bucket exists and you have permission to access it.'
+            self.notify(
+                f'Failed to load contents of bucket "{self.bucket_name}". Please check your credentials and make sure the bucket exists and you have permission to access it.',
+                title="Error",
+                severity="error"
             )
+            self.app.action_change_bucket()
+            #self.app.panic(
+            #    f'Failed to load contents of bucket "{self.bucket_name}". Please check your credentials and make sure the bucket exists and you have permission to access it.'
+            #)
 
         node.data.loaded = True
         if node.data.is_dir:
