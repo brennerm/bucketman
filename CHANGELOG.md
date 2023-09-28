@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.1] - 2023-09-28
+
+### Fixed
+
+- include *.tcss files when packaging app
+
 ## [v0.3.0] - 2023-09-28
 
-## Added
+### Added
 
 - implement deletion of S3 object(s)
 - implement upload of local file(s) to S3
@@ -15,11 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - allow to switch between S3 buckets
 - implement dry run mode which disables all write operations
 
-## Changed
+### Changed
 
 - migrate codebase to new Textual version 0.38.1
 
-## Removed
+### Removed
 
 - remove components that have been replaced with built-in Textual components
 
