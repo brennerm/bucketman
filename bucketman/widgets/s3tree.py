@@ -1,7 +1,5 @@
 from __future__ import annotations
 import dataclasses
-import enum
-import functools
 
 import botocore.exceptions
 from rich.style import Style
@@ -9,12 +7,12 @@ from rich.text import Text
 import textual.binding
 import textual.widgets
 import textual.reactive
+import textual.events
 import rich.console
 import rich.text
 from textual.widgets._tree import TreeNode
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
-from bucketman.events import StatusUpdate
 from bucketman.widgets.common import ObjectType
 
 
@@ -75,38 +73,6 @@ class S3Tree(textual.widgets.Tree[S3Object]):
         reloaded_key = self.reload_selected_prefix()
         self.notify(f'Reloaded objects in {self.bucket_name}/{reloaded_key}')
 
-    async def action_delete(self):
-        if self.selected_object.key:
-            if self.selected_object.type == ObjectType.FOLDER:
-                prompt = f"Do you want to delete all objects with the prefix {self.selected_object.key}?"
-            elif self.selected_object.type == ObjectType.FILE:
-                prompt = f"Do you want to delete the object {self.selected_object.key}?"
-        else:
-            prompt = f"Do you want to empty the bucket {self.bucket_name}?"
-
-        await self.app.dialog.do_prompt(
-            prompt, self.delete_prefix_or_object, prefix_or_key=self.selected_object.key
-        )
-
-    async def delete_prefix_or_object(self, prefix_or_key):
-        bucket = self.app.s3_resource.Bucket(self.bucket_name)
-
-        try:
-            bucket.objects.filter(Prefix=prefix_or_key).delete()
-        except botocore.exceptions.ClientError as e:
-            await self.app.handle_status_update(
-                StatusUpdate(
-                    message=f'Failed to delete S3 object(s) "{self.bucket_name}/{prefix_or_key}": {e.response["Error"]["Message"]}',
-                )
-            )
-
-        await self.app.handle_status_update(
-            StatusUpdate(
-                message=f'Deleted S3 object(s) "{self.bucket_name}/{prefix_or_key}"',
-            )
-        )
-        self.load_objects(self.selected_node.parent)
-
     def render_label(self, node: TreeNode[S3Object], base_style: Style, style: Style) -> Text:
         node_label = node._label.copy()
         node_label.stylize(style)
@@ -166,16 +132,6 @@ class S3Tree(textual.widgets.Tree[S3Object]):
             #)
 
         node.data.loaded = True
-        if node.data.is_dir:
-            self.post_message(
-                StatusUpdate(
-                    message=f"Loaded objects in {self.bucket_name}/{prefix}"
-                )
-            )
-        else:
-            self.post_message(
-                StatusUpdate(message=f"Loaded object {self.bucket_name}/{prefix}")
-            )
 
     def load_and_toggle_selected_node(self):
         node = self.cursor_node

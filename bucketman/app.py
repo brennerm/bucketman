@@ -12,17 +12,10 @@ import textual.screen
 import textual.widgets
 
 from bucketman.constants import AWS_HEX_COLOR_CODE
-from bucketman.events import StatusUpdate
 from bucketman.modals import BucketSelectScreen, ConfirmationScreen
 from bucketman.widgets import (
-    Footer,
     LocalTree,
-    Prompt,
-    S3BucketSelect,
     S3Tree,
-    StatusLog,
-    Header,
-    VerticalDivider,
 )
 from bucketman.widgets.common import ObjectType
 
@@ -57,7 +50,6 @@ class BucketManApp(textual.app.App):
         self.s3_client = session.client("s3", endpoint_url=endpoint_url)
         self.s3_resource = session.resource("s3", endpoint_url=endpoint_url)
 
-        self.status_log = StatusLog(id="status_log")
         self.footer = textual.widgets.Footer()
         self.header = textual.widgets.Header()
 

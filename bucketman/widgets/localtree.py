@@ -7,13 +7,6 @@ import os
 import textual.widgets
 import textual.widgets.tree
 import textual.reactive
-import rich.console
-import rich.text
-
-from bucketman.constants import AWS_HEX_COLOR_CODE
-from bucketman.events import StatusUpdate
-from bucketman.widgets.common import ObjectType
-
 
 class LocalTree(textual.widgets.DirectoryTree):
     name = "LocalTree"
