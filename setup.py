@@ -18,6 +18,7 @@ setup(
         "textual==0.38.1",
     ],
     extras_require={"dev": {"autopep8", "pylint", "keepachangelog", "wheel"}},
+    include_package_data=True,
     entry_points="""
         [console_scripts]
         bucketman=bucketman.cli:main
