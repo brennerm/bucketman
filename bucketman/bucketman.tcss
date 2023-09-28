@@ -1,3 +1,7 @@
+* {
+    scrollbar-size: 1 1;
+}
+
 #center {
     height: 100%;
     width: 100%;
