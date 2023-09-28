@@ -23,11 +23,15 @@ Additionally you can pass your access and secret key using the `--access-key-id`
 - switch between S3 buckets
 - browse through local directories
 - delete S3 objects
+- upload files to S3
+- download files from S3
 
 ## Planned features
 
-- copy files from local to S3 and vice versa
 - copy files from one S3 bucket to another
 - move/rename S3 objects
 - set ACL and metadata of S3 objects
+- view file content
 - support S3 bucket pagination
+- FileDrop support for uploading files
+- safe mode disabling all destructive actions
