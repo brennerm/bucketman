@@ -51,6 +51,15 @@ class S3Tree(textual.widgets.Tree[S3Object]):
     async def on_mount(self) -> None:
         self.load_objects(self.root)
 
+    def on_paste(self, event: textual.events.Paste) -> None:
+        """Handle pasting a path from the clipboard or file drop."""
+        # TODO support pasting multiple paths without erroring
+        paths = event.text.splitlines()
+
+        for path in paths:
+            self.log(f"Would upload {path}")
+            #self.app.action_upload(path.strip())
+
     def reload_node(self, node: TreeNode[S3Object]):
         """Reload the given node. If the node is a file or a prefix with no children, reload the parent."""
         node.remove_children()

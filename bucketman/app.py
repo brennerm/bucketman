@@ -126,11 +126,11 @@ class BucketManApp(textual.app.App):
                 title='Success',
             )
 
-    def action_upload(self) -> None:
-        """Upload the selected local folder/file to the selected S3 prefix after confirmation."""
+    def action_upload(self, path_to_upload: str=None) -> None:
+        """Upload the selected (or given) local folder/file to the selected S3 prefix after confirmation."""
 
         bucket = self.bucket_name
-        path = str(self.selected_local_object)
+        path = path_to_upload if path_to_upload else str(self.selected_local_object)
         key = os.path.join(self.selected_s3_prefix, os.path.basename(path))
 
         def check_upload(do_upload: bool) -> None:
