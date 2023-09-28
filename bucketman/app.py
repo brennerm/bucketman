@@ -90,14 +90,10 @@ class BucketManApp(textual.app.App):
         """Download the selected object to the selected local folder after confirmation."""
         bucket = self.bucket_name
         key = self.selected_s3_key_or_prefix
-        path = str(self.selected_local_folder.joinpath(os.path.basename(key)))
+        path = str(self.selected_local_folder)
 
         def check_download(do_download: bool) -> None:
             if not do_download:
-                return
-
-            if self.dry_run:
-                self.notify(f'Would download {bucket}/{key} to {path}', title='Dry Run')
                 return
 
             self.run_worker(self.do_download(self.bucket_name, key, path), thread=True)
@@ -110,11 +106,18 @@ class BucketManApp(textual.app.App):
         )
 
     async def do_download(self, bucket, key, path) -> None:
+        """Download the given S3 object to the given local folder."""
+        target_path = os.path.join(path, os.path.basename(key))
+
+        if self.dry_run:
+            self.notify(f'Would download {bucket}/{key} to {target_path}', title='Dry Run')
+            return
+
         try:
-            self.s3_client.download_file(bucket, key, path)
+            self.s3_client.download_file(bucket, key, target_path)
         except botocore.exceptions.ClientError as e:
             self.notify(
-                f'Failed to download object {bucket}/{key} to {path}: {e.response["Error"]["Message"]}',
+                f'Failed to download object {bucket}/{key} to {target_path}: {e.response["Error"]["Message"]}',
                 title='Error',
                 severity='error'
             )
@@ -122,7 +125,7 @@ class BucketManApp(textual.app.App):
             self.query_one('#left LocalTree', LocalTree).reload_selected_directory()
 
             self.notify(
-                f'Successfully downloaded object {bucket}/{key} to {path}',
+                f'Successfully downloaded object {bucket}/{key} to {target_path}',
                 title='Success',
             )
 
@@ -131,14 +134,10 @@ class BucketManApp(textual.app.App):
 
         bucket = self.bucket_name
         path = path_to_upload if path_to_upload else str(self.selected_local_object)
-        key = os.path.join(self.selected_s3_prefix, os.path.basename(path))
+        key = self.selected_s3_prefix
 
         def check_upload(do_upload: bool) -> None:
             if not do_upload:
-                return
-
-            if self.dry_run:
-                self.notify(f'Would upload {path} to {key}', title='Dry Run')
                 return
 
             self.run_worker(self.do_upload(path, bucket, key), thread=True)
@@ -151,27 +150,34 @@ class BucketManApp(textual.app.App):
         )
 
     async def do_upload(self, path, bucket, key) -> None:
+        """Upload the given local folder/file to the given S3 prefix."""
+        target_path = os.path.join(key, os.path.basename(path))
+
+        if self.dry_run:
+            self.notify(f'Would upload {path} to {bucket}/{target_path}', title='Dry Run')
+            return
+
         try:
             if os.path.isdir(path):
                 for root, dirs, files in os.walk(path):
                     for file in files:
                         src = os.path.join(root, file)
                         dst = os.path.normpath(
-                            os.path.join(key, os.path.relpath(root, path), file)
+                            os.path.join(target_path, os.path.relpath(root, path), file)
                         )
                         self.s3_client.upload_file(src, bucket, dst)
             else:
-                self.s3_client.upload_file(path, bucket, key)
+                self.s3_client.upload_file(path, bucket, target_path)
         except botocore.exceptions.ClientError as e:
             self.notify(
-                f'Failed to upload file {path} to {bucket}/{key}: {e.response["Error"]["Message"]}',
+                f'Failed to upload file {path} to {bucket}/{target_path}: {e.response["Error"]["Message"]}',
                 title='Error',
                 severity='error'
             )
         else:
             self.query_one('#right S3Tree', S3Tree).reload_selected_prefix()
             self.notify(
-                f'Successfully uploaded path {path} to {bucket}/{key}',
+                f'Successfully uploaded path {path} to {bucket}/{target_path}',
                 title='Success',
             )
 
@@ -181,10 +187,6 @@ class BucketManApp(textual.app.App):
 
         def check_delete(do_delete: bool) -> None:
             if not do_delete:
-                return
-
-            if self.dry_run:
-                self.notify(f'Would delete {path}', title='Dry Run')
                 return
 
             self.run_worker(self.do_local_delete(path), thread=True)
@@ -198,6 +200,10 @@ class BucketManApp(textual.app.App):
 
     async def do_local_delete(self, path: str) -> None:
         """Delete the given local file or folder."""
+        if self.dry_run:
+            self.notify(f'Would delete {path}', title='Dry Run')
+            return
+
         try:
             if os.path.isfile(path):
                 os.remove(path)
@@ -225,10 +231,6 @@ class BucketManApp(textual.app.App):
             if not do_delete:
                 return
 
-            if self.dry_run:
-                self.notify(f'Would delete {bucket}/{key_or_prefix}', title='Dry Run')
-                return
-
             self.run_worker(self.do_s3_delete(bucket, key_or_prefix), thread=True)
 
         self.push_screen(
@@ -240,6 +242,9 @@ class BucketManApp(textual.app.App):
 
     async def do_s3_delete(self, bucket: str, key_or_prefix: str) -> None:
         """Delete the given S3 object or prefix."""
+        if self.dry_run:
+            self.notify(f'Would delete {bucket}/{key_or_prefix}', title='Dry Run')
+            return
 
         try:
             self.s3_resource.Bucket(bucket).objects.filter(Prefix=key_or_prefix).delete()
@@ -272,6 +277,11 @@ class BucketManApp(textual.app.App):
         )
 
     def on_mount(self) -> None:
+        if self.dry_run:
+            self.notify(
+                "Dry run mode is enabled. No changes will be made.",
+                title="Dry Run",
+            )
         # open bucket select screen if no bucket has been provided
         if not self.bucket_name:
             self.action_select_bucket()
@@ -293,6 +303,6 @@ class BucketManApp(textual.app.App):
         yield textual.containers.Horizontal(
             textual.containers.ScrollableContainer(directory, id="left"),
             textual.containers.ScrollableContainer(widget, id="right"),
-            id="center"
+            id="main"
         )
         yield self.footer
