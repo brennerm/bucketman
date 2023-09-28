@@ -56,15 +56,15 @@ class RequiredIf(click.Option):
     required_if="access_key_id",
 )
 @click.option("--bucket", help="Set the S3 bucket to open.")
-@click.option("--debug", is_flag=True, help="Enable debug logs.")
-def main(endpoint_url, access_key_id, secret_access_key, bucket, debug):
+@click.option("--dry-run", is_flag=True, help="Enable dry run mode, which disables all write operations and notifies you of what would happen.", default=False)
+def main(endpoint_url, access_key_id, secret_access_key, bucket, dry_run):
     BucketManApp(
         bucket=bucket,
         endpoint_url=endpoint_url,
         access_key_id=access_key_id,
         secret_access_key=secret_access_key,
+        dry_run=dry_run
     ).run()
-
 
 if __name__ == "__main__":
     main()
