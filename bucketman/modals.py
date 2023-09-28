@@ -18,8 +18,10 @@ class ConfirmationScreen(textual.screen.ModalScreen[bool]):
         grid-gutter: 1 2;
         grid-rows: 1fr 3;
         padding: 0 1;
-        width: 60;
-        height: 11;
+        max-width: 60%;
+        max-height: 30%;
+        height: auto;
+        width: auto;
         border: thick $background 80%;
         background: $surface;
     }
@@ -29,6 +31,7 @@ class ConfirmationScreen(textual.screen.ModalScreen[bool]):
         height: 1fr;
         width: 1fr;
         content-align: center middle;
+        text-align: center;
     }
 
     Button {
@@ -62,10 +65,10 @@ class ConfirmationScreen(textual.screen.ModalScreen[bool]):
         self.query_one("#no").focus()
 
     def action_select_left(self) -> None:
-        self.focus_next()
+        self.query_one("#no").focus()
 
     def action_select_right(self) -> None:
-        self.focus_next()
+        self.query_one("#yes").focus()
 
     def on_button_pressed(self, event: textual.widgets.Button.Pressed) -> None:
         if event.button.id == "yes":
