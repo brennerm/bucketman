@@ -1,4 +1,3 @@
-import time
 import botocore.exceptions
 import textual.app
 from textual.app import ComposeResult
