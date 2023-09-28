@@ -13,9 +13,9 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     install_requires=[
-        "boto3",
-        "click",
-        "textual",
+        "boto3==1.28.54",
+        "click==8.1.7",
+        "textual==0.38.1",
     ],
     extras_require={"dev": {"autopep8", "pylint", "keepachangelog", "wheel"}},
     entry_points="""
